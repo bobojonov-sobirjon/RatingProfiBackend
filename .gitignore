@@ -231,8 +231,8 @@ celerybeat.pid
 *.sage.py
 
 # test files
-test_all_apis.py
-test_user_list_api.py
+# test_all_apis.py
+# test_user_list_api.py
 
 # Spyder
 .spyderproject
