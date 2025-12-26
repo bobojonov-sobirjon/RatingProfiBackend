@@ -1,0 +1,68 @@
+from django.urls import path
+from .views import (
+    SendSMSCodeView,
+    VerifySMSCodeView,
+    AdminLoginView,
+    UserProfileView,
+    UserPublicProfileView,
+    UserListView,
+    QuestionnaireListView,
+    QuestionnaireArchiveListView,
+    DesignerQuestionnaireListView,
+    DesignerQuestionnaireDetailView,
+    DesignerQuestionnaireStatusUpdateView,
+    DesignerQuestionnaireFilterChoicesView,
+    RepairQuestionnaireListView,
+    RepairQuestionnaireDetailView,
+    RepairQuestionnaireStatusUpdateView,
+    RepairQuestionnaireFilterChoicesView,
+    SupplierQuestionnaireListView,
+    SupplierQuestionnaireDetailView,
+    SupplierQuestionnaireStatusUpdateView,
+    SupplierQuestionnaireFilterChoicesView,
+    MediaQuestionnaireListView,
+    MediaQuestionnaireDetailView,
+    MediaQuestionnaireStatusUpdateView,
+    DesignerQuestionnaireModerationView,
+    RepairQuestionnaireModerationView,
+    SupplierQuestionnaireModerationView,
+    MediaQuestionnaireModerationView,
+    UserRolesView,
+)
+
+urlpatterns = [
+    path('login/', SendSMSCodeView.as_view(), name='send-sms'),
+    path('verify-sms/', VerifySMSCodeView.as_view(), name='verify-sms'),
+    path('login-admin/', AdminLoginView.as_view(), name='admin-login'),
+    path('profile/', UserProfileView.as_view(), name='profile'),
+    path('users/', UserListView.as_view(), name='user-list'),
+    path('users/<int:id>/', UserPublicProfileView.as_view(), name='user-public-profile'),
+    
+    path('roles/', UserRolesView.as_view(), name='user-roles'),
+    
+    path('questionnaires/all/', QuestionnaireListView.as_view(), name='all-questionnaires-list'),
+    path('questionnaires/all/archive/', QuestionnaireArchiveListView.as_view(), name='all-questionnaires-archive'),
+    
+    path('questionnaires/', DesignerQuestionnaireListView.as_view(), name='questionnaire-list'),
+    path('questionnaires/filter-choices/', DesignerQuestionnaireFilterChoicesView.as_view(), name='questionnaire-filter-choices'),
+    path('questionnaires/<int:pk>/', DesignerQuestionnaireDetailView.as_view(), name='questionnaire-detail'),
+    path('questionnaires/<int:pk>/update-status/', DesignerQuestionnaireStatusUpdateView.as_view(), name='questionnaire-status-update'),
+    path('questionnaires/<int:pk>/moderation/', DesignerQuestionnaireModerationView.as_view(), name='questionnaire-moderation'),
+    
+    path('repair-questionnaires/', RepairQuestionnaireListView.as_view(), name='repair-questionnaire-list'),
+    path('repair-questionnaires/filter-choices/', RepairQuestionnaireFilterChoicesView.as_view(), name='repair-questionnaire-filter-choices'),
+    path('repair-questionnaires/<int:pk>/', RepairQuestionnaireDetailView.as_view(), name='repair-questionnaire-detail'),
+    path('repair-questionnaires/<int:pk>/update-status/', RepairQuestionnaireStatusUpdateView.as_view(), name='repair-questionnaire-status-update'),
+    path('repair-questionnaires/<int:pk>/moderation/', RepairQuestionnaireModerationView.as_view(), name='repair-questionnaire-moderation'),
+    
+    path('supplier-questionnaires/', SupplierQuestionnaireListView.as_view(), name='supplier-questionnaire-list'),
+    path('supplier-questionnaires/filter-choices/', SupplierQuestionnaireFilterChoicesView.as_view(), name='supplier-questionnaire-filter-choices'),
+    path('supplier-questionnaires/<int:pk>/', SupplierQuestionnaireDetailView.as_view(), name='supplier-questionnaire-detail'),
+    path('supplier-questionnaires/<int:pk>/update-status/', SupplierQuestionnaireStatusUpdateView.as_view(), name='supplier-questionnaire-status-update'),
+    path('supplier-questionnaires/<int:pk>/moderation/', SupplierQuestionnaireModerationView.as_view(), name='supplier-questionnaire-moderation'),
+    
+    path('media-questionnaires/', MediaQuestionnaireListView.as_view(), name='media-questionnaire-list'),
+    path('media-questionnaires/<int:pk>/', MediaQuestionnaireDetailView.as_view(), name='media-questionnaire-detail'),
+    path('media-questionnaires/<int:pk>/update-status/', MediaQuestionnaireStatusUpdateView.as_view(), name='media-questionnaire-status-update'),
+    path('media-questionnaires/<int:pk>/moderation/', MediaQuestionnaireModerationView.as_view(), name='media-questionnaire-moderation'),
+] 
