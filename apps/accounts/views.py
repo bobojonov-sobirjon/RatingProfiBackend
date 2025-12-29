@@ -6,7 +6,7 @@ from rest_framework.pagination import LimitOffsetPagination
 from django.contrib.auth import get_user_model, models as auth_models
 from django.db import models as django_models
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .serializers import (
     PhoneLoginSerializer,
@@ -663,6 +663,92 @@ class DesignerQuestionnaireListView(views.APIView):
     """
     permission_classes = [permissions.AllowAny]
     
+    @extend_schema(
+        summary='Получить список анкет дизайнеров',
+        description='GET: Получить список всех анкет дизайнеров с фильтрацией',
+        parameters=[
+            OpenApiParameter(
+                name='group',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Выберете основную категорию (residential_designer, commercial_designer, decorator, home_stager, architect, landscape_designer, light_designer)',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='city',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Выберете город (поиск в city или work_cities). Специальные значения: "По всей России", "ЮФО", "Любые города онлайн"',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='segment',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Выберите сегмент (economy, comfort, business, premium, horeca). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='property_purpose',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Назначение недвижимости (permanent_residence, for_rent, commercial, horeca)',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='object_area',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Площадь объекта (up_to_10m2, up_to_40m2, up_to_80m2, houses, not_important). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='cost_per_sqm',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Стоимость за м2 (up_to_1500, up_to_2500, up_to_4000, over_4000, not_important)',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='experience',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Опыт работы (beginner, up_to_2_years, 2_5_years, 5_10_years, over_10_years)',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='search',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Поиск по full_name',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='ordering',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Сортировка (created_at, -created_at, full_name, -full_name, и т.д.)',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='limit',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Количество результатов на странице',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='offset',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Смещение для пагинации',
+                required=False,
+            ),
+        ],
+        responses={
+            200: DesignerQuestionnaireSerializer(many=True),
+        }
+    )
     def get(self, request):
         # Staff userlar uchun barcha questionnaire'lar, oddiy userlar uchun faqat is_moderation=True
         if request.user.is_authenticated and request.user.is_staff:
@@ -676,38 +762,114 @@ class DesignerQuestionnaireListView(views.APIView):
         if group:
             questionnaires = questionnaires.filter(group=group)
         
-        # Выберете город (city)
+        # Выберете город (city) - faqat a'zolar tomonidan e'lon qilingan shaharlar + maxsus variantlar
         city = request.query_params.get('city')
         if city:
-            questionnaires = questionnaires.filter(city__icontains=city)
+            # Maxsus variantlar: "По всей России", "ЮФО", "Любые города онлайн"
+            if city == "По всей России":
+                # Barcha shaharlar - filter qo'llamaymiz
+                pass
+            elif city == "ЮФО":
+                # Janubiy Federal Okrug shaharlari
+                yfo_cities = ['Ростов-на-Дону', 'Краснодар', 'Сочи', 'Ставрополь', 'Волгоград', 'Астрахань']
+                from django.db.models import Q
+                city_q = Q()
+                for yfo_city in yfo_cities:
+                    city_q |= Q(city__icontains=yfo_city) | Q(work_cities__icontains=yfo_city)
+                if city_q:
+                    questionnaires = questionnaires.filter(city_q)
+            elif city == "Любые города онлайн":
+                # Online ishlaydiganlar - cooperation_terms ichida "онлайн" yoki "online" qidirish
+                questionnaires = questionnaires.filter(
+                    django_models.Q(cooperation_terms__icontains='онлайн') | 
+                    django_models.Q(cooperation_terms__icontains='online')
+                )
+            else:
+                # Oddiy shahar qidirish
+                questionnaires = questionnaires.filter(
+                    django_models.Q(city__icontains=city) | 
+                    django_models.Q(work_cities__icontains=city)
+                )
         
-        # Выберете сегмент (segments - JSONField, contains check)
+        # Выберете сегмент (segments - JSONField, contains check, ko'p tanlash mumkin)
         segment = request.query_params.get('segment')
         if segment:
-            questionnaires = questionnaires.filter(segments__contains=[segment])
+            # Agar bir nechta segment kelsa, ularni ajratib olamiz
+            segments_list = [s.strip() for s in segment.split(',')]
+            # Har bir segment uchun filter qo'llaymiz
+            from django.db.models import Q
+            segment_q = Q()
+            for seg in segments_list:
+                segment_q |= Q(segments__contains=[seg])
+            if segment_q:
+                questionnaires = questionnaires.filter(segment_q)
         
         # Назначение недвижимости (property_purpose - services ichida)
         property_purpose = request.query_params.get('property_purpose')
         if property_purpose:
-            # residential_designer yoki commercial_designer
-            questionnaires = questionnaires.filter(services__contains=[property_purpose])
+            # Mapping: permanent_residence -> residential_designer, for_rent -> residential_designer, commercial -> commercial_designer, horeca -> designer_horika
+            purpose_mapping = {
+                'permanent_residence': 'residential_designer',
+                'for_rent': 'residential_designer',
+                'commercial': 'commercial_designer',
+                'horeca': 'designer_horika',
+            }
+            service_value = purpose_mapping.get(property_purpose, property_purpose)
+            questionnaires = questionnaires.filter(services__contains=[service_value])
         
-        # Площадь объекта (object_area - service_packages_description ichida search)
+        # Площадь объекта (object_area - service_packages_description ichida search, ko'p tanlash mumkin)
         object_area = request.query_params.get('object_area')
         if object_area:
-            questionnaires = questionnaires.filter(service_packages_description__icontains=object_area)
+            # Agar bir nechta area kelsa, ularni ajratib olamiz
+            areas_list = [a.strip() for a in object_area.split(',')]
+            # Mapping: up_to_10m2 -> "10 м2", up_to_40m2 -> "40 м2", up_to_80m2 -> "80 м2", houses -> "дом", not_important -> skip
+            area_mapping = {
+                'up_to_10m2': '10 м2',
+                'up_to_40m2': '40 м2',
+                'up_to_80m2': '80 м2',
+                'houses': 'дом',
+            }
+            from django.db.models import Q
+            area_q = Q()
+            for area in areas_list:
+                if area != 'not_important':
+                    search_term = area_mapping.get(area, area)
+                    area_q |= Q(service_packages_description__icontains=search_term)
+            if area_q:
+                questionnaires = questionnaires.filter(area_q)
         
         # Стоимость за м2 (cost_per_sqm - service_packages_description ichida search)
         cost_per_sqm = request.query_params.get('cost_per_sqm')
-        if cost_per_sqm:
-            questionnaires = questionnaires.filter(service_packages_description__icontains=cost_per_sqm)
+        if cost_per_sqm and cost_per_sqm != 'not_important':
+            # Mapping: up_to_1500 -> "1500", up_to_2500 -> "2500", up_to_4000 -> "4000", over_4000 -> "4000" (lekin > 4000)
+            cost_mapping = {
+                'up_to_1500': '1500',
+                'up_to_2500': '2500',
+                'up_to_4000': '4000',
+                'over_4000': '4000',  # Bu uchun alohida logika kerak
+            }
+            search_term = cost_mapping.get(cost_per_sqm, cost_per_sqm)
+            if cost_per_sqm == 'over_4000':
+                # 4000 dan katta qiymatlar uchun
+                questionnaires = questionnaires.filter(service_packages_description__icontains=search_term)
+            else:
+                questionnaires = questionnaires.filter(service_packages_description__icontains=search_term)
         
         # Опыт работы (experience - welcome_message ichida search yoki additional_info)
         experience = request.query_params.get('experience')
         if experience:
+            # Mapping: beginner -> "новичок", up_to_2_years -> "2 лет", 2_5_years -> "2-5", 5_10_years -> "5-10", over_10_years -> "10 лет"
+            experience_mapping = {
+                'beginner': 'новичок',
+                'up_to_2_years': '2 лет',
+                '2_5_years': '2-5',
+                '5_10_years': '5-10',
+                'over_10_years': '10 лет',
+            }
+            search_term = experience_mapping.get(experience, experience)
             questionnaires = questionnaires.filter(
-                django_models.Q(welcome_message__icontains=experience) | 
-                django_models.Q(additional_info__icontains=experience)
+                django_models.Q(welcome_message__icontains=search_term) | 
+                django_models.Q(additional_info__icontains=search_term)
             )
         
         # Search by full_name
@@ -744,12 +906,62 @@ class DesignerQuestionnaireListView(views.APIView):
     description='''
     GET: Получить все доступные варианты для фильтров анкет дизайнеров
     
+    Query параметры:
+    - group: (необязательно) Фильтр по категории для получения городов только этой категории
+    
     Возвращает:
-    - categories: Основные категории (group choices) - Выберете основную котегорию
-    - cities: Список уникальных городов из анкет - Выберете город
-    - segments: Сегменты работы - Выберете сегмент
-    - property_purposes: Назначение недвижимости (residential/commercial) - Назначение недвижимости
+    - categories: Основные категории - Выберете основную котегорию
+      * Дизайнер жилых помещений (residential_designer)
+      * Дизайнер коммерческой недвижимости (commercial_designer)
+      * Декоратор (decorator)
+      * Хоустейджер (home_stager)
+      * Архитектор (architect)
+      * Ландшафтный дизайнер (landscape_designer)
+      * Светодизайнер (light_designer)
+    - cities: Список уникальных городов из анкет выбранной категории + специальные варианты - Выберете город
+      * По всей России
+      * ЮФО
+      * Любые города онлайн
+      * + города, заявленные членами клуба в выбранной категории
+    - segments: Сегменты работы (можно выбрать несколько) - Выберете сегмент
+      * Эконом (economy)
+      * Комфорт (comfort)
+      * Бизнесс (business)
+      * Примиум (premium)
+      * Хорика (horeca)
+    - property_purposes: Назначение недвижимости - Назначение недвижимости
+      * Для постоянного проживания (permanent_residence)
+      * Для сдачи (for_rent)
+      * Коммерческая недвижимость (commercial)
+      * Хорика (horeca)
+    - object_areas: Площадь объекта (можно выбрать несколько) - Площадь объекта
+      * до 10 м² (up_to_10m2)
+      * до 40 м² (up_to_40m2)
+      * до 80 м² (up_to_80m2)
+      * дома (houses)
+      * не важно (not_important)
+    - cost_per_sqm_options: Стоимость за м2 - Стоимость за м2
+      * До 1500 р (up_to_1500)
+      * до 2500 р (up_to_2500)
+      * до 4000 р (up_to_4000)
+      * свыше 4000 р (over_4000)
+      * не важно (not_important)
+    - experience_options: Опыт работы - Опыт работы
+      * Новичок (beginner)
+      * до 2 лет (up_to_2_years)
+      * 2-5 лет (2_5_years)
+      * 5-10 лет (5_10_years)
+      * свыше 10 лет (over_10_years)
     ''',
+    parameters=[
+        OpenApiParameter(
+            name='group',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по категории для получения городов только этой категории (необязательно)',
+            required=False,
+        ),
+    ],
     responses={
         200: {'description': 'Варианты для фильтров'}
     }
@@ -765,18 +977,45 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
         from .models import DesignerQuestionnaire, QUESTIONNAIRE_GROUP_CHOICES
         
         # Основные категории (group) - Выберете основную котегорию
+        # Yangi kategoriyalar: Дизайнер жилых помещений, Дизайнер коммерческой недвижимости, Декоратор, Хоустейджер, Архитектор, Ландшафтный дизайнер, Светодизайнер
         categories = [
-            {'value': choice[0], 'label': choice[1]} 
-            for choice in QUESTIONNAIRE_GROUP_CHOICES
+            {'value': 'residential_designer', 'label': 'Дизайнер жилых помещений'},
+            {'value': 'commercial_designer', 'label': 'Дизайнер коммерческой недвижимости'},
+            {'value': 'decorator', 'label': 'Декоратор'},
+            {'value': 'home_stager', 'label': 'Хоустейджер'},
+            {'value': 'architect', 'label': 'Архитектор'},
+            {'value': 'landscape_designer', 'label': 'Ландшафтный дизайнер'},
+            {'value': 'light_designer', 'label': 'Светодизайнер'},
         ]
         
         # Уникальные города - Выберете город
+        # Faqat a'zolar tomonidan e'lon qilingan shaharlar + maxsus variantlar
         # Staff userlar uchun barcha, oddiy userlar uchun faqat is_moderation=True
         is_staff = request.user.is_authenticated and request.user.is_staff
         if is_staff:
             cities_query = DesignerQuestionnaire.objects.filter(is_deleted=False)
         else:
             cities_query = DesignerQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
+        
+        # Group filter bo'lsa, faqat o'sha kategoriyadagi shaharlarni ko'rsatish
+        group = request.query_params.get('group')
+        if group:
+            # Group bo'yicha filter qo'llaymiz
+            if group == 'residential_designer':
+                cities_query = cities_query.filter(services__contains=['residential_designer'])
+            elif group == 'commercial_designer':
+                cities_query = cities_query.filter(services__contains=['commercial_designer'])
+            elif group == 'decorator':
+                cities_query = cities_query.filter(services__contains=['decorator'])
+            elif group == 'home_stager':
+                cities_query = cities_query.filter(services__contains=['home_stager'])
+            elif group == 'architect':
+                cities_query = cities_query.filter(services__contains=['architecture'])
+            elif group == 'landscape_designer':
+                cities_query = cities_query.filter(services__contains=['landscape_design'])
+            elif group == 'light_designer':
+                cities_query = cities_query.filter(services__contains=['light_designer'])
+        
         cities = cities_query.exclude(
             city__isnull=True
         ).exclude(
@@ -784,16 +1023,54 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
         ).values_list('city', flat=True).distinct().order_by('city')
         cities_list = [{'value': city, 'label': city} for city in cities]
         
-        # Сегменты - Выберете сегмент
+        # Maxsus variantlar qo'shamiz
+        cities_list.insert(0, {'value': 'По всей России', 'label': 'По всей России'})
+        cities_list.insert(1, {'value': 'ЮФО', 'label': 'ЮФО'})
+        cities_list.insert(2, {'value': 'Любые города онлайн', 'label': 'Любые города онлайн'})
+        
+        # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
+        # Эконом, Комфорт, Бизнесс, Примиум, Хорика
         segments = [
-            {'value': choice[0], 'label': choice[1]} 
-            for choice in DesignerQuestionnaire.SEGMENT_CHOICES
+            {'value': 'economy', 'label': 'Эконом'},
+            {'value': 'comfort', 'label': 'Комфорт'},
+            {'value': 'business', 'label': 'Бизнесс'},
+            {'value': 'premium', 'label': 'Примиум'},
+            {'value': 'horeca', 'label': 'Хорика'},
         ]
         
         # Назначение недвижимости - Назначение недвижимости
         property_purposes = [
-            {'value': 'residential_designer', 'label': 'Жилая недвижимость'},
-            {'value': 'commercial_designer', 'label': 'Коммерческая недвижимость'},
+            {'value': 'permanent_residence', 'label': 'Для постоянного проживания'},
+            {'value': 'for_rent', 'label': 'Для сдачи'},
+            {'value': 'commercial', 'label': 'Коммерческая недвижимость'},
+            {'value': 'horeca', 'label': 'Хорика'},
+        ]
+        
+        # Площадь объекта - Площадь объекта (ko'p tanlash mumkin)
+        object_areas = [
+            {'value': 'up_to_10m2', 'label': 'до 10 м²'},
+            {'value': 'up_to_40m2', 'label': 'до 40 м²'},
+            {'value': 'up_to_80m2', 'label': 'до 80 м²'},
+            {'value': 'houses', 'label': 'дома'},
+            {'value': 'not_important', 'label': 'не важно'},
+        ]
+        
+        # Стоимость за м2 - Стоимость за м2
+        cost_per_sqm_options = [
+            {'value': 'up_to_1500', 'label': 'До 1500 р'},
+            {'value': 'up_to_2500', 'label': 'до 2500 р'},
+            {'value': 'up_to_4000', 'label': 'до 4000 р'},
+            {'value': 'over_4000', 'label': 'свыше 4000 р'},
+            {'value': 'not_important', 'label': 'не важно'},
+        ]
+        
+        # Опыт работы - Опыт работы
+        experience_options = [
+            {'value': 'beginner', 'label': 'Новичок'},
+            {'value': 'up_to_2_years', 'label': 'до 2 лет'},
+            {'value': '2_5_years', 'label': '2-5 лет'},
+            {'value': '5_10_years', 'label': '5-10 лет'},
+            {'value': 'over_10_years', 'label': 'свыше 10 лет'},
         ]
         
         return Response({
@@ -801,6 +1078,9 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
             'cities': cities_list,
             'segments': segments,
             'property_purposes': property_purposes,
+            'object_areas': object_areas,
+            'cost_per_sqm_options': cost_per_sqm_options,
+            'experience_options': experience_options,
         }, status=status.HTTP_200_OK)
 
 
@@ -1003,6 +1283,102 @@ class RepairQuestionnaireListView(views.APIView):
     """
     permission_classes = [permissions.AllowAny]
     
+    @extend_schema(
+        summary='Получить список анкет ремонтных бригад / подрядчиков',
+        description='GET: Получить список всех анкет ремонтных бригад / подрядчиков с фильтрацией',
+        parameters=[
+            OpenApiParameter(
+                name='group',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Выберете основную категорию (turnkey, rough_works, finishing_works, plumbing_tiles, floor, walls, rooms_turnkey, electrical, all). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='city',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Выберете город (поиск в representative_cities). Специальные значения: "По всей России", "ЮФО", "Любые города онлайн"',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='segment',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Выберите сегмент (economy, comfort, business, premium, horeca, exclusive). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='vat_payment',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Наличие НДС (hi_home, in_home, no, not_important). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='magazine_cards',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Карточки журналов (hi_home, in_home, no, not_important). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='execution_speed',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Скорость исполнения (advance_booking, quick_start, not_important)',
+                required=False,
+                enum=['advance_booking', 'quick_start', 'not_important'],
+            ),
+            OpenApiParameter(
+                name='cooperation_terms',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Условия сотрудничества (up_to_5_percent, up_to_10_percent, not_important)',
+                required=False,
+                enum=['up_to_5_percent', 'up_to_10_percent', 'not_important'],
+            ),
+            OpenApiParameter(
+                name='business_form',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Форма бизнеса (own_business, franchise)',
+                required=False,
+                enum=['own_business', 'franchise'],
+            ),
+            OpenApiParameter(
+                name='search',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Поиск по full_name или brand_name',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='ordering',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Сортировка (created_at, -created_at, full_name, -full_name, и т.д.)',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='limit',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Количество результатов на странице',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='offset',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Смещение для пагинации',
+                required=False,
+            ),
+        ],
+        responses={
+            200: RepairQuestionnaireSerializer(many=True),
+        }
+    )
     def get(self, request):
         # Staff userlar uchun barcha questionnaire'lar, oddiy userlar uchun faqat is_moderation=True
         if request.user.is_authenticated and request.user.is_staff:
@@ -1011,21 +1387,135 @@ class RepairQuestionnaireListView(views.APIView):
             questionnaires = RepairQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
         
         # Filtering
-        # Выберете основную котегорию (group)
+        # Выберете основную котегорию (group) - ko'p tanlash mumkin
         group = request.query_params.get('group')
         if group:
-            questionnaires = questionnaires.filter(group=group)
+            if group == 'all':
+                # "ВСЕ" - filter qo'llamaymiz
+                pass
+            else:
+                # Ko'p tanlash mumkin - vergul bilan ajratilgan
+                groups_list = [g.strip() for g in group.split(',')]
+                # Mapping: turnkey -> work_list ichida "под ключ", rough_works -> "черновые", finishing_works -> "чистовые", plumbing_tiles -> "сантехника" yoki "плитка", floor -> "пол", walls -> "стены", rooms_turnkey -> "комнаты" va "ключ", electrical -> "электрика"
+                from django.db.models import Q
+                group_q = Q()
+                for grp in groups_list:
+                    if grp == 'turnkey':
+                        group_q |= Q(work_list__icontains='под ключ')
+                    elif grp == 'rough_works':
+                        group_q |= Q(work_list__icontains='черновые')
+                    elif grp == 'finishing_works':
+                        group_q |= Q(work_list__icontains='чистовые')
+                    elif grp == 'plumbing_tiles':
+                        group_q |= Q(work_list__icontains='сантехника') | Q(work_list__icontains='плитка')
+                    elif grp == 'floor':
+                        group_q |= Q(work_list__icontains='пол')
+                    elif grp == 'walls':
+                        group_q |= Q(work_list__icontains='стены')
+                    elif grp == 'rooms_turnkey':
+                        group_q |= Q(work_list__icontains='комнаты') & Q(work_list__icontains='ключ')
+                    elif grp == 'electrical':
+                        group_q |= Q(work_list__icontains='электрика')
+                if group_q:
+                    questionnaires = questionnaires.filter(group_q)
         
-        # Выберете город (representative_cities - JSONField, contains check)
+        # Выберете город (representative_cities - JSONField, contains check) + maxsus variantlar
         city = request.query_params.get('city')
         if city:
-            # representative_cities - массив объектов, ищем по городу в каждом объекте
-            questionnaires = questionnaires.filter(representative_cities__icontains=city)
+            # Maxsus variantlar: "По всей России", "ЮФО", "Любые города онлайн"
+            if city == "По всей России":
+                # Barcha shaharlar - filter qo'llamaymiz
+                pass
+            elif city == "ЮФО":
+                # Janubiy Federal Okrug shaharlari
+                yfo_cities = ['Ростов-на-Дону', 'Краснодар', 'Сочи', 'Ставрополь', 'Волгоград', 'Астрахань']
+                from django.db.models import Q
+                city_q = Q()
+                for yfo_city in yfo_cities:
+                    city_q |= Q(representative_cities__icontains=yfo_city)
+                if city_q:
+                    questionnaires = questionnaires.filter(city_q)
+            elif city == "Любые города онлайн":
+                # Online ishlaydiganlar - cooperation_terms ichida "онлайн" yoki "online" qidirish
+                questionnaires = questionnaires.filter(
+                    django_models.Q(cooperation_terms__icontains='онлайн') | 
+                    django_models.Q(cooperation_terms__icontains='online')
+                )
+            else:
+                # Oddiy shahar qidirish
+                questionnaires = questionnaires.filter(representative_cities__icontains=city)
         
-        # Выберете сегмент (segments - JSONField, contains check)
+        # Выберете сегмент (segments - JSONField, contains check, ko'p tanlash mumkin)
         segment = request.query_params.get('segment')
         if segment:
-            questionnaires = questionnaires.filter(segments__contains=[segment])
+            # Ko'p tanlash mumkin - vergul bilan ajratilgan
+            segments_list = [s.strip() for s in segment.split(',')]
+            from django.db.models import Q
+            segment_q = Q()
+            for seg in segments_list:
+                segment_q |= Q(segments__contains=[seg])
+            if segment_q:
+                questionnaires = questionnaires.filter(segment_q)
+        
+        # Наличие НДС (vat_payment) - ko'p tanlash mumkin
+        vat_payment = request.query_params.get('vat_payment')
+        if vat_payment:
+            # Ko'p tanlash mumkin - vergul bilan ajratilgan
+            vat_list = [v.strip() for v in vat_payment.split(',')]
+            from django.db.models import Q
+            vat_q = Q()
+            for vat in vat_list:
+                if vat == 'not_important':
+                    # "не важно" - filter qo'llamaymiz
+                    pass
+                elif vat == 'hi_home':
+                    # "hi_home" - vat_payment='yes' va magazine_cards='hi_home' yoki faqat vat_payment='yes'
+                    vat_q |= Q(vat_payment='yes')
+                elif vat == 'in_home':
+                    # "in_home" - vat_payment='yes' va magazine_cards='in_home' yoki faqat vat_payment='yes'
+                    vat_q |= Q(vat_payment='yes')
+                elif vat == 'no':
+                    vat_q |= Q(vat_payment='no')
+            if vat_q:
+                questionnaires = questionnaires.filter(vat_q)
+        
+        # Карточки журналов (magazine_cards) - ko'p tanlash mumkin
+        magazine_cards = request.query_params.get('magazine_cards')
+        if magazine_cards:
+            # Ko'p tanlash mumkin - vergul bilan ajratilgan
+            cards_list = [c.strip() for c in magazine_cards.split(',')]
+            from django.db.models import Q
+            cards_q = Q()
+            for card in cards_list:
+                if card == 'not_important':
+                    # "не важно" - filter qo'llamaymiz
+                    pass
+                else:
+                    cards_q |= Q(magazine_cards=card)
+            if cards_q:
+                questionnaires = questionnaires.filter(cards_q)
+        
+        # Скорость исполнения (execution_speed - project_timelines ichida search)
+        execution_speed = request.query_params.get('execution_speed')
+        if execution_speed and execution_speed != 'not_important':
+            # Mapping: advance_booking -> "предварительная запись", quick_start -> "быстрый старт"
+            speed_mapping = {
+                'advance_booking': 'предварительная запись',
+                'quick_start': 'быстрый старт',
+            }
+            search_term = speed_mapping.get(execution_speed, execution_speed)
+            questionnaires = questionnaires.filter(project_timelines__icontains=search_term)
+        
+        # Условия сотрудничества (cooperation_terms ichida search)
+        cooperation_terms = request.query_params.get('cooperation_terms')
+        if cooperation_terms and cooperation_terms != 'not_important':
+            # Mapping: up_to_5_percent -> "5%", up_to_10_percent -> "10%"
+            terms_mapping = {
+                'up_to_5_percent': '5%',
+                'up_to_10_percent': '10%',
+            }
+            search_term = terms_mapping.get(cooperation_terms, cooperation_terms)
+            questionnaires = questionnaires.filter(cooperation_terms__icontains=search_term)
         
         # Назначение недвижимости (property_purpose - work_list ichida search)
         property_purpose = request.query_params.get('property_purpose')
@@ -1277,6 +1767,71 @@ class DesignerQuestionnaireStatusUpdateView(views.APIView):
         200: {'description': 'Варианты для фильтров'}
     }
 )
+@extend_schema(
+    tags=['Repair Questionnaires'],
+    summary='Получить варианты для фильтров анкет ремонтных бригад / подрядчиков',
+    description='''
+    GET: Получить все доступные варианты для фильтров анкет ремонтных бригад / подрядчиков
+    
+    Query параметры:
+    - group: (необязательно) Фильтр по категории для получения городов только этой категории
+    
+    Возвращает:
+    - categories: Основные категории (можно выбрать несколько) - Выберете основную котегорию
+      * ПОД КЛЮЧ (turnkey)
+      * черновые работы (rough_works)
+      * чистовые работы (finishing_works)
+      * Сантехника и плитка (plumbing_tiles)
+      * Пол (floor)
+      * Стены (walls)
+      * Комнаты под ключ (rooms_turnkey)
+      * Электрика (electrical)
+      * ВСЕ (all)
+    - cities: Список уникальных городов из анкет выбранной категории + специальные варианты - Выберете город
+      * По всей России
+      * ЮФО
+      * Любые города онлайн
+      * + города, заявленные членами клуба в выбранной категории
+    - segments: Сегменты работы (можно выбрать несколько) - Выберете сегмент
+      * Эконом (economy)
+      * Комфорт (comfort)
+      * Бизнесс (business)
+      * Примиум (premium)
+      * Хорика (horeca)
+      * Эксклюзив (exclusive)
+    - vat_payments: Наличие НДС (можно выбрать несколько) - Наличие НДС
+      * hi home (hi_home)
+      * in home (in_home)
+      * нет (no)
+      * не важно (not_important)
+    - magazine_cards: Карточки журналов (можно выбрать несколько) - Карточки журналов
+      * hi home (hi_home)
+      * in home (in_home)
+      * нет (no)
+      * не важно (not_important)
+    - execution_speeds: Скорость исполнения - Скорость исполнения
+      * Предварительная запись (advance_booking)
+      * быстрый старт (quick_start)
+      * не важно (not_important)
+    - cooperation_terms_options: Условия сотрудничества - Условия сотрудничества
+      * До 5% (up_to_5_percent)
+      * До 10% (up_to_10_percent)
+      * не важно (not_important)
+    - business_forms: Формы бизнеса - Форма бизнеса
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='group',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по категории для получения городов только этой категории (необязательно)',
+            required=False,
+        ),
+    ],
+    responses={
+        200: {'description': 'Варианты для фильтров'}
+    }
+)
 class RepairQuestionnaireFilterChoicesView(views.APIView):
     """
     Получить варианты для фильтров анкет ремонтных бригад / подрядчиков
@@ -1288,12 +1843,21 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
         from .models import RepairQuestionnaire, QUESTIONNAIRE_GROUP_CHOICES
         
         # Основные категории (group) - Выберете основную котегорию
+        # Yangi kategoriyalar: ПОД КЛЮЧ, черновые работы, чистовые работы, Сантехника и плитка, Пол, Стены, Комнаты под ключ, Электрика, ВСЕ
         categories = [
-            {'value': choice[0], 'label': choice[1]} 
-            for choice in QUESTIONNAIRE_GROUP_CHOICES
+            {'value': 'turnkey', 'label': 'ПОД КЛЮЧ'},
+            {'value': 'rough_works', 'label': 'черновые работы'},
+            {'value': 'finishing_works', 'label': 'чистовые работы'},
+            {'value': 'plumbing_tiles', 'label': 'Сантехника и плитка'},
+            {'value': 'floor', 'label': 'Пол'},
+            {'value': 'walls', 'label': 'Стены'},
+            {'value': 'rooms_turnkey', 'label': 'Комнаты под ключ'},
+            {'value': 'electrical', 'label': 'Электрика'},
+            {'value': 'all', 'label': 'ВСЕ'},
         ]
         
         # Уникальные города из representative_cities - Выберете город
+        # Faqat tanlangan kategoriyadagi a'zolar tomonidan e'lon qilingan shaharlar
         all_cities = set()
         # Staff userlar uchun barcha, oddiy userlar uchun faqat is_moderation=True
         is_staff = request.user.is_authenticated and request.user.is_staff
@@ -1301,6 +1865,34 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
             repair_query = RepairQuestionnaire.objects.filter(is_deleted=False)
         else:
             repair_query = RepairQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
+        
+        # Group filter bo'lsa, faqat o'sha kategoriyadagi shaharlarni ko'rsatish
+        group = request.query_params.get('group')
+        if group and group != 'all':
+            # Group bo'yicha filter qo'llaymiz (work_list ichida qidirish)
+            groups_list = [g.strip() for g in group.split(',')]
+            from django.db.models import Q
+            group_q = Q()
+            for grp in groups_list:
+                if grp == 'turnkey':
+                    group_q |= Q(work_list__icontains='под ключ')
+                elif grp == 'rough_works':
+                    group_q |= Q(work_list__icontains='черновые')
+                elif grp == 'finishing_works':
+                    group_q |= Q(work_list__icontains='чистовые')
+                elif grp == 'plumbing_tiles':
+                    group_q |= Q(work_list__icontains='сантехника') | Q(work_list__icontains='плитка')
+                elif grp == 'floor':
+                    group_q |= Q(work_list__icontains='пол')
+                elif grp == 'walls':
+                    group_q |= Q(work_list__icontains='стены')
+                elif grp == 'rooms_turnkey':
+                    group_q |= Q(work_list__icontains='комнаты') & Q(work_list__icontains='ключ')
+                elif grp == 'electrical':
+                    group_q |= Q(work_list__icontains='электрика')
+            if group_q:
+                repair_query = repair_query.filter(group_q)
+        
         for questionnaire in repair_query.exclude(representative_cities__isnull=True).exclude(representative_cities=[]):
             if isinstance(questionnaire.representative_cities, list):
                 for city_data in questionnaire.representative_cities:
@@ -1310,10 +1902,50 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
                         all_cities.add(city_data)
         cities_list = [{'value': city, 'label': city} for city in sorted(all_cities)]
         
-        # Сегменты - Выберете сегмент
+        # Maxsus variantlar qo'shamiz
+        cities_list.insert(0, {'value': 'По всей России', 'label': 'По всей России'})
+        cities_list.insert(1, {'value': 'ЮФО', 'label': 'ЮФО'})
+        cities_list.insert(2, {'value': 'Любые города онлайн', 'label': 'Любые города онлайн'})
+        
+        # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
+        # Эконом, Комфорт, Бизнесс, Примиум, Хорика, Эксклюзив
         segments = [
-            {'value': choice[0], 'label': choice[1]} 
-            for choice in RepairQuestionnaire.SEGMENT_CHOICES
+            {'value': 'economy', 'label': 'Эконом'},
+            {'value': 'comfort', 'label': 'Комфорт'},
+            {'value': 'business', 'label': 'Бизнесс'},
+            {'value': 'premium', 'label': 'Примиум'},
+            {'value': 'horeca', 'label': 'Хорика'},
+            {'value': 'exclusive', 'label': 'Эксклюзив'},
+        ]
+        
+        # Наличие НДС - Наличие НДС (ko'p tanlash mumkin)
+        vat_payments = [
+            {'value': 'hi_home', 'label': 'hi home'},
+            {'value': 'in_home', 'label': 'in home'},
+            {'value': 'no', 'label': 'нет'},
+            {'value': 'not_important', 'label': 'не важно'},
+        ]
+        
+        # Карточки журналов - Карточки журналов (ko'p tanlash mumkin)
+        magazine_cards = [
+            {'value': 'hi_home', 'label': 'hi home'},
+            {'value': 'in_home', 'label': 'in home'},
+            {'value': 'no', 'label': 'нет'},
+            {'value': 'not_important', 'label': 'не важно'},
+        ]
+        
+        # Скорость исполнения - Скорость исполнения
+        execution_speeds = [
+            {'value': 'advance_booking', 'label': 'Предварительная запись'},
+            {'value': 'quick_start', 'label': 'быстрый старт'},
+            {'value': 'not_important', 'label': 'не важно'},
+        ]
+        
+        # Условия сотрудничества - Условия сотрудничества
+        cooperation_terms_options = [
+            {'value': 'up_to_5_percent', 'label': 'До 5%'},
+            {'value': 'up_to_10_percent', 'label': 'До 10%'},
+            {'value': 'not_important', 'label': 'не важно'},
         ]
         
         # Формы бизнеса
@@ -1326,6 +1958,10 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
             'categories': categories,
             'cities': cities_list,
             'segments': segments,
+            'vat_payments': vat_payments,
+            'magazine_cards': magazine_cards,
+            'execution_speeds': execution_speeds,
+            'cooperation_terms_options': cooperation_terms_options,
             'business_forms': business_forms,
         }, status=status.HTTP_200_OK)
 
@@ -1391,6 +2027,20 @@ class RepairQuestionnaireStatusUpdateView(views.APIView):
     summary='Список анкет поставщиков / салонов / фабрик',
     description='''
     GET: Получить список всех анкет поставщиков / салонов / фабрик
+    
+    Фильтры (query параметры):
+    - group: Выберете основную категорию (supplier, factory, salon, и т.д.)
+    - city: Выберете город (поиск в representative_cities)
+    - segment: Выберите сегмент (horeca, business, comfort, premium, medium, economy)
+    - vat_payment: Наличие НДС (yes, no)
+    - magazine_cards: Карточки журналов (hi_home, in_home, no, other)
+    - execution_speed: Скорость исполнения (поиск в delivery_terms)
+    - cooperation_terms: Условия сотрудничества (поиск в cooperation_terms)
+    - business_form: Форма бизнеса (own_business, franchise)
+    - search: Поиск по full_name или brand_name
+    - ordering: Сортировка (created_at, -created_at, full_name, -full_name, и т.д.)
+    - limit: Количество результатов на странице
+    - offset: Смещение для пагинации
     
     POST: Создать новую анкету поставщика / салона / фабрики
     
@@ -1461,49 +2111,230 @@ class SupplierQuestionnaireListView(views.APIView):
     """
     permission_classes = [permissions.AllowAny]
     
+    @extend_schema(
+        summary='Получить список анкет поставщиков / салонов / фабрик',
+        description='GET: Получить список всех анкет поставщиков / салонов / фабрик с фильтрацией',
+        parameters=[
+            OpenApiParameter(
+                name='group',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Выберете основную категорию (rough_materials, finishing_materials, soft_furniture, cabinet_furniture, appliances, decor, all). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='city',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Выберете город (поиск в representative_cities). Специальные значения: "По всей России", "ЮФО", "Любые города онлайн". Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='segment',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Выберите сегмент (economy, comfort, business, premium, horeca, exclusive). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='vat_payment',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Наличие НДС (yes, no, not_important)',
+                required=False,
+                enum=['yes', 'no', 'not_important'],
+            ),
+            OpenApiParameter(
+                name='magazine_cards',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Карточки журналов (hi_home, in_home, no, not_important, + варианты из медиапространства). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='execution_speed',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Скорость исполнения (in_stock, up_to_2_weeks, up_to_1_month, up_to_3_months, not_important). Можно указать несколько через запятую',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='cooperation_terms',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Условия сотрудничества (up_to_10_percent, up_to_20_percent, up_to_30_percent, not_important)',
+                required=False,
+                enum=['up_to_10_percent', 'up_to_20_percent', 'up_to_30_percent', 'not_important'],
+            ),
+            OpenApiParameter(
+                name='business_form',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Форма бизнеса (own_business, franchise)',
+                required=False,
+                enum=['own_business', 'franchise'],
+            ),
+            OpenApiParameter(
+                name='search',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Поиск по full_name или brand_name',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='ordering',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Сортировка (created_at, -created_at, full_name, -full_name, и т.д.)',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='limit',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Количество результатов на странице',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='offset',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Смещение для пагинации',
+                required=False,
+            ),
+        ],
+        responses={
+            200: SupplierQuestionnaireSerializer(many=True),
+        }
+    )
     def get(self, request):
-        # Staff userlar uchun barcha questionnaire'lar, oddiy userlar uchun faqat is_moderation=True
+        # Staff userlar uchun barcha questionnaire'lar (is_deleted=False), oddiy userlar uchun faqat is_moderation=True
         if request.user.is_authenticated and request.user.is_staff:
-            questionnaires = SupplierQuestionnaire.objects.all()
+            questionnaires = SupplierQuestionnaire.objects.filter(is_deleted=False)
         else:
             questionnaires = SupplierQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
         
         # Filtering
-        # Выберете основную котегорию (group)
+        # Выберете основную котегорию (group) - ko'p tanlash mumkin
         group = request.query_params.get('group')
         if group:
-            questionnaires = questionnaires.filter(group=group)
+            if group == 'all':
+                # "ВСЕ" - filter qo'llamaymiz
+                pass
+            else:
+                # Ko'p tanlash mumkin - vergul bilan ajratilgan
+                groups_list = [g.strip() for g in group.split(',')]
+                # Mapping: rough_materials -> product_assortment ichida "черновые", finishing_materials -> "чистовые", soft_furniture -> "мягкая мебель", cabinet_furniture -> "корпусная мебель", appliances -> "техника", decor -> "декор"
+                from django.db.models import Q
+                group_q = Q()
+                for grp in groups_list:
+                    if grp == 'rough_materials':
+                        group_q |= Q(product_assortment__icontains='черновые')
+                    elif grp == 'finishing_materials':
+                        group_q |= Q(product_assortment__icontains='чистовые')
+                    elif grp == 'soft_furniture':
+                        group_q |= Q(product_assortment__icontains='мягкая мебель')
+                    elif grp == 'cabinet_furniture':
+                        group_q |= Q(product_assortment__icontains='корпусная мебель')
+                    elif grp == 'appliances':
+                        group_q |= Q(product_assortment__icontains='техника')
+                    elif grp == 'decor':
+                        group_q |= Q(product_assortment__icontains='декор')
+                if group_q:
+                    questionnaires = questionnaires.filter(group_q)
         
-        # Выберете город (representative_cities - JSONField, contains check)
+        # Выберете город (representative_cities - JSONField, contains check) + maxsus variantlar + ko'p tanlash
         city = request.query_params.get('city')
         if city:
-            # representative_cities - массив объектов, ищем по городу в каждом объекте
-            questionnaires = questionnaires.filter(representative_cities__icontains=city)
+            # Ko'p tanlash mumkin - vergul bilan ajratilgan
+            cities_list = [c.strip() for c in city.split(',')]
+            from django.db.models import Q
+            city_q = Q()
+            for city_item in cities_list:
+                # Maxsus variantlar: "По всей России", "ЮФО", "Любые города онлайн"
+                if city_item == "По всей России":
+                    # Barcha shaharlar - filter qo'llamaymiz
+                    pass
+                elif city_item == "ЮФО":
+                    # Janubiy Federal Okrug shaharlari
+                    yfo_cities = ['Ростов-на-Дону', 'Краснодар', 'Сочи', 'Ставрополь', 'Волгоград', 'Астрахань']
+                    for yfo_city in yfo_cities:
+                        city_q |= Q(representative_cities__icontains=yfo_city)
+                elif city_item == "Любые города онлайн":
+                    # Online ishlaydiganlar - cooperation_terms ichida "онлайн" yoki "online" qidirish
+                    city_q |= Q(cooperation_terms__icontains='онлайн') | Q(cooperation_terms__icontains='online')
+                else:
+                    # Oddiy shahar qidirish
+                    city_q |= Q(representative_cities__icontains=city_item)
+            if city_q:
+                questionnaires = questionnaires.filter(city_q)
         
-        # Выберите сегмент (segments - JSONField, contains check)
+        # Выберите сегмент (segments - JSONField, contains check, ko'p tanlash mumkin)
         segment = request.query_params.get('segment')
         if segment:
-            questionnaires = questionnaires.filter(segments__contains=[segment])
+            # Ko'p tanlash mumkin - vergul bilan ajratilgan
+            segments_list = [s.strip() for s in segment.split(',')]
+            from django.db.models import Q
+            segment_q = Q()
+            for seg in segments_list:
+                segment_q |= Q(segments__contains=[seg])
+            if segment_q:
+                questionnaires = questionnaires.filter(segment_q)
         
         # Наличие НДС (vat_payment)
         vat_payment = request.query_params.get('vat_payment')
-        if vat_payment:
+        if vat_payment and vat_payment != 'not_important':
             questionnaires = questionnaires.filter(vat_payment=vat_payment)
         
-        # Карточки журналов (magazine_cards)
+        # Карточки журналов (magazine_cards) - ko'p tanlash mumkin + mediaspace variantlari
         magazine_cards = request.query_params.get('magazine_cards')
         if magazine_cards:
-            questionnaires = questionnaires.filter(magazine_cards=magazine_cards)
+            # Ko'p tanlash mumkin - vergul bilan ajratilgan
+            cards_list = [c.strip() for c in magazine_cards.split(',')]
+            from django.db.models import Q
+            cards_q = Q()
+            for card in cards_list:
+                if card == 'not_important':
+                    # "не важно" - filter qo'llamaymiz
+                    pass
+                else:
+                    # Standard variantlar yoki mediaspace variantlari
+                    cards_q |= Q(magazine_cards=card)
+            if cards_q:
+                questionnaires = questionnaires.filter(cards_q)
         
-        # Скорость исполнения (delivery_terms ichida search)
+        # Скорость исполнения (delivery_terms ichida search, ko'p tanlash mumkin)
         execution_speed = request.query_params.get('execution_speed')
         if execution_speed:
-            questionnaires = questionnaires.filter(delivery_terms__icontains=execution_speed)
+            # Ko'p tanlash mumkin - vergul bilan ajratilgan
+            speeds_list = [s.strip() for s in execution_speed.split(',')]
+            from django.db.models import Q
+            speed_q = Q()
+            for speed in speeds_list:
+                if speed != 'not_important':
+                    # Mapping: in_stock -> "в наличии", up_to_2_weeks -> "2 недель", up_to_1_month -> "1 месяц", up_to_3_months -> "3 месяцев"
+                    speed_mapping = {
+                        'in_stock': 'в наличии',
+                        'up_to_2_weeks': '2 недель',
+                        'up_to_1_month': '1 месяц',
+                        'up_to_3_months': '3 месяцев',
+                    }
+                    search_term = speed_mapping.get(speed, speed)
+                    speed_q |= Q(delivery_terms__icontains=search_term)
+            if speed_q:
+                questionnaires = questionnaires.filter(speed_q)
         
         # Условия сотрудничества (cooperation_terms ichida search)
         cooperation_terms = request.query_params.get('cooperation_terms')
-        if cooperation_terms:
-            questionnaires = questionnaires.filter(cooperation_terms__icontains=cooperation_terms)
+        if cooperation_terms and cooperation_terms != 'not_important':
+            # Mapping: up_to_10_percent -> "10%", up_to_20_percent -> "20%", up_to_30_percent -> "30%"
+            terms_mapping = {
+                'up_to_10_percent': '10%',
+                'up_to_20_percent': '20%',
+                'up_to_30_percent': '30%',
+            }
+            search_term = terms_mapping.get(cooperation_terms, cooperation_terms)
+            questionnaires = questionnaires.filter(cooperation_terms__icontains=search_term)
         
         # Форма бизнеса (business_form)
         business_form = request.query_params.get('business_form')
@@ -1661,14 +2492,62 @@ class SupplierQuestionnaireDetailView(views.APIView):
     description='''
     GET: Получить все доступные варианты для фильтров анкет поставщиков / салонов / фабрик
     
+    Query параметры:
+    - group: (необязательно) Фильтр по категории для получения городов только этой категории
+    
     Возвращает:
-    - categories: Основные категории (group choices) - Выберете основную категорию
-    - cities: Список уникальных городов из representative_cities - Выберете город
-    - segments: Сегменты работы - Выберите сегмент
+    - categories: Основные категории (можно выбрать несколько) - Выберете основную котегорию
+      * Черновые материалы (rough_materials)
+      * Чистовые материалы (finishing_materials)
+      * Мягкая мебель (soft_furniture)
+      * Корпусная мебель (cabinet_furniture)
+      * Техника (appliances)
+      * Декор (decor)
+      * ВСЕ (all)
+    - cities: Список уникальных городов из анкет выбранной категории + специальные варианты - Выберете город
+      * По всей России
+      * ЮФО
+      * Любые города онлайн
+      * + города, заявленные членами клуба в выбранной категории (можно выбрать несколько)
+    - segments: Сегменты работы (можно выбрать несколько) - Выберете сегмент
+      * Эконом (economy)
+      * Комфорт (comfort)
+      * Бизнесс (business)
+      * Примиум (premium)
+      * Хорика (horeca)
+      * Эксклюзив (exclusive)
     - vat_payments: Наличие НДС - Наличие НДС
-    - magazine_cards: Карточки журналов - Карточки журналов
+      * Да (yes)
+      * Нет (no)
+      * Не важно (not_important)
+    - magazine_cards: Карточки журналов (можно выбрать несколько) - Карточки журналов
+      * hi home (hi_home)
+      * in home (in_home)
+      * нет (no)
+      * не важно (not_important)
+      * + варианты из медиапространства (MediaQuestionnaire)
+    - execution_speeds: Скорость исполнения (можно выбрать несколько) - Скорость исполнения
+      * В наличии (in_stock)
+      * до 2х недель (up_to_2_weeks)
+      * до 1 месяца (up_to_1_month)
+      * до 3х месяцев (up_to_3_months)
+      * не важно (not_important)
+    - cooperation_terms_options: Условия сотрудничества - Условия сотрудничества
+      * до 10% (up_to_10_percent)
+      * до 20% (up_to_20_percent)
+      * до 30% (up_to_30_percent)
+      * не важно (not_important)
     - business_forms: Формы бизнеса - Форма бизнеса
     ''',
+    parameters=[
+        OpenApiParameter(
+            name='group',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по категории для получения городов только этой категории (необязательно)',
+            required=False,
+        ),
+    ],
     responses={
         200: {'description': 'Варианты для фильтров'}
     }
@@ -1681,21 +2560,52 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
     permission_classes = [permissions.AllowAny]
     
     def get(self, request):
-        from .models import SupplierQuestionnaire, QUESTIONNAIRE_GROUP_CHOICES
+        from .models import SupplierQuestionnaire, MediaQuestionnaire, QUESTIONNAIRE_GROUP_CHOICES
         
         # Основные категории (group) - Выберете основную категорию
+        # Yangi kategoriyalar: Черновые материалы, Чистовые материалы, Мягкая мебель, Корпусная мебель, Техника, Декор, ВСЕ
         categories = [
-            {'value': choice[0], 'label': choice[1]} 
-            for choice in QUESTIONNAIRE_GROUP_CHOICES
+            {'value': 'rough_materials', 'label': 'Черновые материалы'},
+            {'value': 'finishing_materials', 'label': 'Чистовые материалы'},
+            {'value': 'soft_furniture', 'label': 'Мягкая мебель'},
+            {'value': 'cabinet_furniture', 'label': 'Корпусная мебель'},
+            {'value': 'appliances', 'label': 'Техника'},
+            {'value': 'decor', 'label': 'Декор'},
+            {'value': 'all', 'label': 'ВСЕ'},
         ]
         
         # Уникальные города из representative_cities - Выберете город
-        # Staff userlar uchun barcha, oddiy userlar uchun faqat is_moderation=True
+        # Faqat tanlangan kategoriyadagi a'zolar tomonidan e'lon qilingan shaharlar
+        # Staff userlar uchun barcha (is_deleted=False), oddiy userlar uchun faqat is_moderation=True
         is_staff = request.user.is_authenticated and request.user.is_staff
         if is_staff:
-            supplier_query = SupplierQuestionnaire.objects.all()
+            supplier_query = SupplierQuestionnaire.objects.filter(is_deleted=False)
         else:
             supplier_query = SupplierQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
+        
+        # Group filter bo'lsa, faqat o'sha kategoriyadagi shaharlarni ko'rsatish
+        group = request.query_params.get('group')
+        if group and group != 'all':
+            # Group bo'yicha filter qo'llaymiz (product_assortment ichida qidirish)
+            groups_list = [g.strip() for g in group.split(',')]
+            from django.db.models import Q
+            group_q = Q()
+            for grp in groups_list:
+                if grp == 'rough_materials':
+                    group_q |= Q(product_assortment__icontains='черновые')
+                elif grp == 'finishing_materials':
+                    group_q |= Q(product_assortment__icontains='чистовые')
+                elif grp == 'soft_furniture':
+                    group_q |= Q(product_assortment__icontains='мягкая мебель')
+                elif grp == 'cabinet_furniture':
+                    group_q |= Q(product_assortment__icontains='корпусная мебель')
+                elif grp == 'appliances':
+                    group_q |= Q(product_assortment__icontains='техника')
+                elif grp == 'decor':
+                    group_q |= Q(product_assortment__icontains='декор')
+            if group_q:
+                supplier_query = supplier_query.filter(group_q)
+        
         all_cities = set()
         for questionnaire in supplier_query.exclude(representative_cities__isnull=True).exclude(representative_cities=[]):
             if isinstance(questionnaire.representative_cities, list):
@@ -1706,22 +2616,68 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
                         all_cities.add(city_data)
         cities_list = [{'value': city, 'label': city} for city in sorted(all_cities)]
         
-        # Сегменты - Выберите сегмент
+        # Maxsus variantlar qo'shamiz
+        cities_list.insert(0, {'value': 'По всей России', 'label': 'По всей России'})
+        cities_list.insert(1, {'value': 'ЮФО', 'label': 'ЮФО'})
+        cities_list.insert(2, {'value': 'Любые города онлайн', 'label': 'Любые города онлайн'})
+        
+        # Сегменты - Выберите сегмент (ko'p tanlash mumkin)
+        # Эконом, Комфорт, Бизнесс, Примиум, Хорика, Эксклюзив
         segments = [
-            {'value': choice[0], 'label': choice[1]} 
-            for choice in SupplierQuestionnaire.SEGMENT_CHOICES
+            {'value': 'economy', 'label': 'Эконом'},
+            {'value': 'comfort', 'label': 'Комфорт'},
+            {'value': 'business', 'label': 'Бизнесс'},
+            {'value': 'premium', 'label': 'Примиум'},
+            {'value': 'horeca', 'label': 'Хорика'},
+            {'value': 'exclusive', 'label': 'Эксклюзив'},
         ]
         
         # Наличие НДС - Наличие НДС
         vat_payments = [
-            {'value': choice[0], 'label': choice[1]} 
-            for choice in SupplierQuestionnaire.VAT_PAYMENT_CHOICES
+            {'value': 'yes', 'label': 'Да'},
+            {'value': 'no', 'label': 'Нет'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
-        # Карточки журналов - Карточки журналов
+        # Карточки журналов - Карточки журналов (ko'p tanlash mumkin) + mediaspace variantlari
         magazine_cards = [
-            {'value': choice[0], 'label': choice[1]} 
-            for choice in SupplierQuestionnaire.MAGAZINE_CARD_CHOICES
+            {'value': 'hi_home', 'label': 'hi home'},
+            {'value': 'in_home', 'label': 'in home'},
+            {'value': 'no', 'label': 'нет'},
+            {'value': 'not_important', 'label': 'не важно'},
+        ]
+        
+        # Mediaspace guruhidan variantlar qo'shamiz
+        # MediaQuestionnaire modelidan brand_name larni olamiz
+        if is_staff:
+            media_query = MediaQuestionnaire.objects.filter(is_deleted=False, is_moderation=True)
+        else:
+            media_query = MediaQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
+        
+        # MediaQuestionnaire modelida brand_name bor
+        for media in media_query:
+            if media.brand_name:
+                # Duplicate larni oldini olish uchun value ni unique qilamiz
+                media_value = media.brand_name.lower().replace(' ', '_').replace('-', '_')
+                # Agar allaqachon qo'shilgan bo'lsa, qo'shmaslik
+                if not any(card['value'] == media_value for card in magazine_cards):
+                    magazine_cards.append({'value': media_value, 'label': media.brand_name})
+        
+        # Скорость исполнения - Скорость исполнения (ko'p tanlash mumkin)
+        execution_speeds = [
+            {'value': 'in_stock', 'label': 'В наличии'},
+            {'value': 'up_to_2_weeks', 'label': 'до 2х недель'},
+            {'value': 'up_to_1_month', 'label': 'до 1 месяца'},
+            {'value': 'up_to_3_months', 'label': 'до 3х месяцев'},
+            {'value': 'not_important', 'label': 'не важно'},
+        ]
+        
+        # Условия сотрудничества - Условия сотрудничества
+        cooperation_terms_options = [
+            {'value': 'up_to_10_percent', 'label': 'до 10%'},
+            {'value': 'up_to_20_percent', 'label': 'до 20%'},
+            {'value': 'up_to_30_percent', 'label': 'до 30%'},
+            {'value': 'not_important', 'label': 'не важно'},
         ]
         
         # Формы бизнеса
@@ -1736,6 +2692,8 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
             'segments': segments,
             'vat_payments': vat_payments,
             'magazine_cards': magazine_cards,
+            'execution_speeds': execution_speeds,
+            'cooperation_terms_options': cooperation_terms_options,
             'business_forms': business_forms,
         }, status=status.HTTP_200_OK)
 

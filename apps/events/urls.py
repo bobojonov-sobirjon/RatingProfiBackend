@@ -4,6 +4,7 @@ from .views import (
     UpcomingEventDetailView,
     RatingPageView,
     ReviewsPageView,
+    ReportsAnalyticsView,
 )
 
 urlpatterns = [
@@ -11,4 +12,5 @@ urlpatterns = [
     path('upcoming-events/<int:pk>/', UpcomingEventDetailView.as_view(), name='upcoming-event-detail'),
     path('ratings/', RatingPageView.as_view(), name='rating-page'),
     path('reviews/', ReviewsPageView.as_view(), name='reviews-page'),
+    path('reports/', ReportsAnalyticsView.as_view(), name='reports-analytics'),
 ]
