@@ -1,7 +1,7 @@
 from rest_framework import permissions, status, views
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, PermissionDenied
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .models import QuestionnaireRating
 from .serializers import (
@@ -123,7 +123,43 @@ class QuestionnaireRatingCreateView(views.APIView):
     - total_rating_count: Общее количество отзывов
     - positive_rating_count: Количество положительных отзывов (⭐)
     - constructive_rating_count: Количество конструктивных отзывов (☆)
+    
+    Фильтры (применяются только к DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire):
+    - id: Фильтр по ID анкеты
+    - phone: Фильтр по телефону (поиск по частичному совпадению)
+    - organization_name: Фильтр по названию организации / бренда (поиск по частичному совпадению)
+    - full_name: Фильтр по ФИО человека (поиск по частичному совпадению)
     ''',
+    parameters=[
+        OpenApiParameter(
+            name='id',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по ID анкеты',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='phone',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по телефону (поиск по частичному совпадению)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='organization_name',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по названию организации / бренда (поиск по частичному совпадению)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='full_name',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по ФИО человека (поиск по частичному совпадению)',
+            required=False,
+        ),
+    ],
     responses={
         200: {'description': 'Список всех анкет с рейтингами'}
     }
@@ -136,12 +172,32 @@ class QuestionnaireRatingAllView(views.APIView):
     permission_classes = [permissions.AllowAny]
     
     def get(self, request):
+        # Фильтры
+        filter_id = request.query_params.get('id')
+        filter_phone = request.query_params.get('phone', '').strip()
+        filter_org_name = request.query_params.get('organization_name', '').strip()
+        filter_full_name = request.query_params.get('full_name', '').strip()
+        
         # Barcha anketalarni olish va rating'lar bilan birlashtirish
         result = []
         
         # DesignerQuestionnaire
         designers = DesignerQuestionnaire.objects.filter(status='published', is_moderation=True)
         for designer in designers:
+            # Filter qo'llash
+            if filter_id:
+                try:
+                    if designer.id != int(filter_id):
+                        continue
+                except (ValueError, TypeError):
+                    continue
+            if filter_phone and filter_phone.lower() not in (designer.phone or '').lower():
+                continue
+            if filter_org_name and filter_org_name.lower() not in (designer.full_name or '').lower():
+                continue
+            if filter_full_name and filter_full_name.lower() not in (designer.full_name or '').lower():
+                continue
+            
             ratings = QuestionnaireRating.objects.filter(
                 role='Дизайн',
                 questionnaire_id=designer.id,
@@ -151,6 +207,9 @@ class QuestionnaireRatingAllView(views.APIView):
                 'request_name': 'DesignerQuestionnaire',
                 'id': designer.id,
                 'name': designer.full_name,
+                'phone': designer.phone,
+                'full_name': designer.full_name,
+                'brand_name': None,
                 'group': 'Дизайн',
                 'total_rating_count': ratings.count(),
                 'positive_rating_count': ratings.filter(is_positive=True).count(),
@@ -160,6 +219,19 @@ class QuestionnaireRatingAllView(views.APIView):
         # RepairQuestionnaire
         repairs = RepairQuestionnaire.objects.filter(status='published')
         for repair in repairs:
+            # Filter qo'llash
+            if filter_id and repair.id != int(filter_id):
+                continue
+            if filter_phone and filter_phone.lower() not in (repair.phone or '').lower():
+                continue
+            if filter_org_name:
+                org_match = (filter_org_name.lower() in (repair.brand_name or '').lower() or 
+                            filter_org_name.lower() in (repair.full_name or '').lower())
+                if not org_match:
+                    continue
+            if filter_full_name and filter_full_name.lower() not in (repair.full_name or '').lower():
+                continue
+            
             ratings = QuestionnaireRating.objects.filter(
                 role='Ремонт',
                 questionnaire_id=repair.id,
@@ -169,6 +241,9 @@ class QuestionnaireRatingAllView(views.APIView):
                 'request_name': 'RepairQuestionnaire',
                 'id': repair.id,
                 'name': repair.full_name or repair.brand_name,
+                'phone': repair.phone,
+                'full_name': repair.full_name,
+                'brand_name': repair.brand_name,
                 'group': 'Ремонт',
                 'total_rating_count': ratings.count(),
                 'positive_rating_count': ratings.filter(is_positive=True).count(),
@@ -178,6 +253,23 @@ class QuestionnaireRatingAllView(views.APIView):
         # SupplierQuestionnaire
         suppliers = SupplierQuestionnaire.objects.filter(status='published', is_moderation=True)
         for supplier in suppliers:
+            # Filter qo'llash
+            if filter_id:
+                try:
+                    if supplier.id != int(filter_id):
+                        continue
+                except (ValueError, TypeError):
+                    continue
+            if filter_phone and filter_phone.lower() not in (supplier.phone or '').lower():
+                continue
+            if filter_org_name:
+                org_match = (filter_org_name.lower() in (supplier.brand_name or '').lower() or 
+                            filter_org_name.lower() in (supplier.full_name or '').lower())
+                if not org_match:
+                    continue
+            if filter_full_name and filter_full_name.lower() not in (supplier.full_name or '').lower():
+                continue
+            
             ratings = QuestionnaireRating.objects.filter(
                 role='Поставщик',
                 questionnaire_id=supplier.id,
@@ -187,13 +279,16 @@ class QuestionnaireRatingAllView(views.APIView):
                 'request_name': 'SupplierQuestionnaire',
                 'id': supplier.id,
                 'name': supplier.full_name or supplier.brand_name,
+                'phone': supplier.phone,
+                'full_name': supplier.full_name,
+                'brand_name': supplier.brand_name,
                 'group': 'Поставщик',
                 'total_rating_count': ratings.count(),
                 'positive_rating_count': ratings.filter(is_positive=True).count(),
                 'constructive_rating_count': ratings.filter(is_constructive=True).count(),
             })
         
-        # MediaQuestionnaire
+        # MediaQuestionnaire (filter qo'llanmaydi, lekin ko'rsatiladi)
         media = MediaQuestionnaire.objects.filter(status='published', is_moderation=True)
         for media_item in media:
             ratings = QuestionnaireRating.objects.filter(
@@ -205,6 +300,9 @@ class QuestionnaireRatingAllView(views.APIView):
                 'request_name': 'MediaQuestionnaire',
                 'id': media_item.id,
                 'name': media_item.full_name or media_item.brand_name,
+                'phone': media_item.phone,
+                'full_name': media_item.full_name,
+                'brand_name': media_item.brand_name,
                 'group': 'Медиа',
                 'total_rating_count': ratings.count(),
                 'positive_rating_count': ratings.filter(is_positive=True).count(),

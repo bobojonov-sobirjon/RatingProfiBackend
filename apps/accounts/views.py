@@ -391,9 +391,57 @@ class UserProfileView(views.APIView):
     - MediaQuestionnaire
     
     Требуется авторизация и права администратора (is_staff=True)
+    
+    Пагинация:
+    - limit: Количество результатов на странице (по умолчанию: 20, максимум: 100)
+    - offset: Смещение для пагинации (по умолчанию: 0)
     ''',
+    parameters=[
+        OpenApiParameter(
+            name='limit',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Количество результатов на странице (по умолчанию: 20, максимум: 100)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='id',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по ID анкеты',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='phone',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по телефону (поиск по частичному совпадению)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='organization_name',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по названию организации / бренда (brand_name, поиск по частичному совпадению)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='full_name',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по ФИО человека (full_name, поиск по частичному совпадению)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='offset',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Смещение для пагинации (по умолчанию: 0)',
+            required=False,
+        ),
+    ],
     responses={
-        200: {'description': 'Список всех удаленных анкет'},
+        200: {'description': 'Список всех удаленных анкет с пагинацией'},
         403: {'description': 'Доступ запрещен. Только администраторы могут просматривать архив'}
     }
 )
@@ -425,33 +473,62 @@ class QuestionnaireArchiveListView(views.APIView):
         # Объединяем результаты
         combined_data = list(designer_serializer.data) + list(repair_serializer.data) + list(supplier_serializer.data) + list(media_serializer.data)
         
+        # Фильтры (ID, phone, organization_name, full_name)
+        # Faqat DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire bo'yicha filter
+        filter_id = request.query_params.get('id')
+        filter_phone = request.query_params.get('phone', '').strip()
+        filter_org_name = request.query_params.get('organization_name', '').strip()
+        filter_full_name = request.query_params.get('full_name', '').strip()
+        
+        if filter_id or filter_phone or filter_org_name or filter_full_name:
+            filtered_data = []
+            for item in combined_data:
+                # Faqat DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire ni filter qilamiz
+                request_name = item.get('request_name', '')
+                if request_name not in ['DesignerQuestionnaire', 'RepairQuestionnaire', 'SupplierQuestionnaire']:
+                    # MediaQuestionnaire ni o'tkazib yuboramiz (filter qilmaymiz)
+                    filtered_data.append(item)
+                    continue
+                
+                # ID filter
+                if filter_id:
+                    try:
+                        if item.get('id') != int(filter_id):
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                
+                # Phone filter
+                if filter_phone:
+                    phone = item.get('phone', '') or ''
+                    if filter_phone.lower() not in phone.lower():
+                        continue
+                
+                # Organization name filter (brand_name)
+                if filter_org_name:
+                    brand_name = item.get('brand_name', '') or ''
+                    full_name_check = item.get('full_name', '') or ''
+                    # brand_name yoki full_name da qidirish
+                    if (filter_org_name.lower() not in brand_name.lower() and 
+                        filter_org_name.lower() not in full_name_check.lower()):
+                        continue
+                
+                # Full name filter
+                if filter_full_name:
+                    full_name = item.get('full_name', '') or ''
+                    if filter_full_name.lower() not in full_name.lower():
+                        continue
+                
+                filtered_data.append(item)
+            combined_data = filtered_data
+        
         # Сортируем по дате создания (новые первыми)
         combined_data.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         
         # Pagination
         paginator = LimitOffsetPagination()
-        paginator.default_limit = 100
-        paginator.limit_query_param = 'limit'
-        paginator.offset_query_param = 'offset'
-        
-        limit = request.query_params.get('limit')
-        offset = request.query_params.get('offset')
-        
-        if limit:
-            try:
-                limit = int(limit)
-                if limit > 0:
-                    paginator.default_limit = limit
-            except ValueError:
-                pass
-        
-        if offset:
-            try:
-                offset = int(offset)
-            except ValueError:
-                offset = 0
-        else:
-            offset = 0
+        paginator.default_limit = 20
+        paginator.max_limit = 100
         
         page = paginator.paginate_queryset(combined_data, request)
         if page is not None:
@@ -479,9 +556,63 @@ class QuestionnaireArchiveListView(views.APIView):
     - Если request_name = "RepairQuestionnaire": GET /api/v1/accounts/repair-questionnaires/{id}/
     - Если request_name = "SupplierQuestionnaire": GET /api/v1/accounts/supplier-questionnaires/{id}/
     - Если request_name = "MediaQuestionnaire": GET /api/v1/accounts/media-questionnaires/{id}/
+    
+    Фильтры (применяются только к DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire):
+    - id: Фильтр по ID анкеты
+    - phone: Фильтр по телефону (поиск по частичному совпадению)
+    - organization_name: Фильтр по названию организации / бренда (brand_name, поиск по частичному совпадению)
+    - full_name: Фильтр по ФИО человека (full_name, поиск по частичному совпадению)
+    
+    Пагинация:
+    - limit: Количество результатов на странице (по умолчанию: 20, максимум: 100)
+    - offset: Смещение для пагинации (по умолчанию: 0)
     ''',
+    parameters=[
+        OpenApiParameter(
+            name='id',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по ID анкеты',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='phone',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по телефону (поиск по частичному совпадению)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='organization_name',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по названию организации / бренда (brand_name, поиск по частичному совпадению)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='full_name',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по ФИО человека (full_name, поиск по частичному совпадению)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='limit',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Количество результатов на странице (по умолчанию: 20, максимум: 100)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='offset',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Смещение для пагинации (по умолчанию: 0)',
+            required=False,
+        ),
+    ],
     responses={
-        200: {'description': 'Список всех анкет'}
+        200: {'description': 'Список всех анкет с пагинацией'}
     }
 )
 class QuestionnaireListView(views.APIView):
@@ -489,7 +620,7 @@ class QuestionnaireListView(views.APIView):
     Общий список всех анкет (дизайнеров, ремонтных бригад/подрядчиков, поставщиков/салонов/фабрик и медиа пространств/интерьерных журналов)
     GET /api/v1/accounts/questionnaires/all/
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
         # Staff userlar uchun barcha questionnaire'lar, oddiy userlar uchun faqat is_moderation=True
@@ -526,30 +657,66 @@ class QuestionnaireListView(views.APIView):
         # Объединяем результаты
         combined_data = list(designer_serializer.data) + list(repair_serializer.data) + list(supplier_serializer.data) + list(media_serializer.data)
         
+        # Фильтры (ID, phone, organization_name, full_name)
+        # Faqat DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire bo'yicha filter
+        filter_id = request.query_params.get('id')
+        filter_phone = request.query_params.get('phone', '').strip()
+        filter_org_name = request.query_params.get('organization_name', '').strip()
+        filter_full_name = request.query_params.get('full_name', '').strip()
+        
+        if filter_id or filter_phone or filter_org_name or filter_full_name:
+            filtered_data = []
+            for item in combined_data:
+                # Faqat DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire ni filter qilamiz
+                request_name = item.get('request_name', '')
+                if request_name not in ['DesignerQuestionnaire', 'RepairQuestionnaire', 'SupplierQuestionnaire']:
+                    # MediaQuestionnaire ni o'tkazib yuboramiz (filter qilmaymiz)
+                    filtered_data.append(item)
+                    continue
+                
+                # ID filter
+                if filter_id:
+                    try:
+                        if item.get('id') != int(filter_id):
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                
+                # Phone filter
+                if filter_phone:
+                    phone = item.get('phone', '') or ''
+                    if filter_phone.lower() not in phone.lower():
+                        continue
+                
+                # Organization name filter (brand_name)
+                if filter_org_name:
+                    brand_name = item.get('brand_name', '') or ''
+                    full_name_check = item.get('full_name', '') or ''
+                    # brand_name yoki full_name da qidirish
+                    if (filter_org_name.lower() not in brand_name.lower() and 
+                        filter_org_name.lower() not in full_name_check.lower()):
+                        continue
+                
+                # Full name filter
+                if filter_full_name:
+                    full_name = item.get('full_name', '') or ''
+                    if filter_full_name.lower() not in full_name.lower():
+                        continue
+                
+                filtered_data.append(item)
+            combined_data = filtered_data
+        
         # Сортируем по дате создания (новые первыми)
         combined_data.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         
         # Pagination
         paginator = LimitOffsetPagination()
-        paginator.default_limit = 100
-        paginator.limit_query_param = 'limit'
-        paginator.offset_query_param = 'offset'
+        paginator.default_limit = 20
+        paginator.max_limit = 100
         
-        limit = request.query_params.get('limit')
-        offset = request.query_params.get('offset')
-        
-        if limit:
-            limit = int(limit)
-            offset = int(offset) if offset else 0
-            paginated_data = combined_data[offset:offset + limit]
-            total_count = len(combined_data)
-            
-            return Response({
-                'count': total_count,
-                'next': f"?limit={limit}&offset={offset + limit}" if offset + limit < total_count else None,
-                'previous': f"?limit={limit}&offset={offset - limit}" if offset > 0 else None,
-                'results': paginated_data
-            }, status=status.HTTP_200_OK)
+        page = paginator.paginate_queryset(combined_data, request)
+        if page is not None:
+            return paginator.get_paginated_response(page)
         
         return Response(combined_data, status=status.HTTP_200_OK)
 
