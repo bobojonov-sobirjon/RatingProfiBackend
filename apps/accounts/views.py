@@ -3238,20 +3238,23 @@ class DesignerQuestionnaireModerationView(views.APIView):
         # Создание или получение User
         # Очищаем phone от + и пробелов для поиска
         clean_phone = ''.join(filter(str.isdigit, questionnaire.phone))
-        user, created = User.objects.get_or_create(
-            phone=clean_phone,
-            defaults={
-                'role': 'designer',
-                'full_name': questionnaire.full_name,
-                'is_phone_verified': True,
-                'is_profile_completed': True,
-            }
-        )
         
-        # Если пользователь уже существует, обновляем роль если нужно
-        if not created and user.role != 'designer':
-            user.role = 'designer'
-            user.save()
+        try:
+            user = User.objects.get(phone=clean_phone)
+            # Если пользователь уже существует, обновляем роль если нужно
+            if user.role != 'designer':
+                user.role = 'designer'
+                user.save()
+        except User.DoesNotExist:
+            # Создаем нового пользователя через create_user для правильной установки username
+            user = User.objects.create_user(
+                phone=clean_phone,
+                password=None,  # Пароль не требуется для модерации
+                role='designer',
+                full_name=questionnaire.full_name,
+                is_phone_verified=True,
+                is_profile_completed=True,
+            )
         
         # Создание Report
         start_date = date.today()
@@ -3414,20 +3417,23 @@ class SupplierQuestionnaireModerationView(views.APIView):
         # Создание или получение User
         # Очищаем phone от + и пробелов для поиска
         clean_phone = ''.join(filter(str.isdigit, questionnaire.phone))
-        user, created = User.objects.get_or_create(
-            phone=clean_phone,
-            defaults={
-                'role': 'supplier',
-                'full_name': questionnaire.full_name,
-                'is_phone_verified': True,
-                'is_profile_completed': True,
-            }
-        )
         
-        # Если пользователь уже существует, обновляем роль если нужно
-        if not created and user.role != 'supplier':
-            user.role = 'supplier'
-            user.save()
+        try:
+            user = User.objects.get(phone=clean_phone)
+            # Если пользователь уже существует, обновляем роль если нужно
+            if user.role != 'supplier':
+                user.role = 'supplier'
+                user.save()
+        except User.DoesNotExist:
+            # Создаем нового пользователя через create_user для правильной установки username
+            user = User.objects.create_user(
+                phone=clean_phone,
+                password=None,  # Пароль не требуется для модерации
+                role='supplier',
+                full_name=questionnaire.full_name,
+                is_phone_verified=True,
+                is_profile_completed=True,
+            )
         
         # Создание Report
         start_date = date.today()
@@ -3503,20 +3509,23 @@ class MediaQuestionnaireModerationView(views.APIView):
         # Создание или получение User
         # Очищаем phone от + и пробелов для поиска
         clean_phone = ''.join(filter(str.isdigit, questionnaire.phone))
-        user, created = User.objects.get_or_create(
-            phone=clean_phone,
-            defaults={
-                'role': 'media',
-                'full_name': questionnaire.full_name,
-                'is_phone_verified': True,
-                'is_profile_completed': True,
-            }
-        )
         
-        # Если пользователь уже существует, обновляем роль если нужно
-        if not created and user.role != 'media':
-            user.role = 'media'
-            user.save()
+        try:
+            user = User.objects.get(phone=clean_phone)
+            # Если пользователь уже существует, обновляем роль если нужно
+            if user.role != 'media':
+                user.role = 'media'
+                user.save()
+        except User.DoesNotExist:
+            # Создаем нового пользователя через create_user для правильной установки username
+            user = User.objects.create_user(
+                phone=clean_phone,
+                password=None,  # Пароль не требуется для модерации
+                role='media',
+                full_name=questionnaire.full_name,
+                is_phone_verified=True,
+                is_profile_completed=True,
+            )
         
         # Создание Report
         start_date = date.today()
