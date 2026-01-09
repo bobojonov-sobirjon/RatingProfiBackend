@@ -29,9 +29,10 @@ class UserAdmin(BaseUserAdmin):
     
     fieldsets = (
         (None, {'fields': ('phone', 'password')}),
-        ('Shaxsiy ma\'lumotlar', {
+        ('Личные данные', {
             'fields': (
                 'full_name',
+                'email',
                 'photo',
                 'description',
                 'city',
@@ -39,7 +40,7 @@ class UserAdmin(BaseUserAdmin):
                 'website',
             )
         }),
-        ('Rol va huquqlar', {
+        ('Роль и права', {
             'fields': (
                 'role',
                 'is_active',
@@ -49,14 +50,14 @@ class UserAdmin(BaseUserAdmin):
                 'user_permissions',
             )
         }),
-        ('Profil holati', {
+        ('Состояние профиля', {
             'fields': (
                 'is_phone_verified',
                 'is_profile_completed',
                 'is_active_profile',
             )
         }),
-        ('Kompaniya ma\'lumotlari', {
+        ('Данные компании', {
             'fields': (
                 'company_name',
                 'inn',
@@ -67,19 +68,19 @@ class UserAdmin(BaseUserAdmin):
             ),
             'classes': ('collapse',)
         }),
-        ('Ijtimoiy tarmoqlar', {
+        ('Социальные сети', {
             'fields': ('telegram', 'instagram', 'vk'),
             'classes': ('collapse',)
         }),
-        ('Hamkorlik', {
+        ('Сотрудничество', {
             'fields': ('cooperation_terms',),
             'classes': ('collapse',)
         }),
-        ('QR va ulashish', {
+        ('QR и шаринг', {
             'fields': ('qr_code', 'share_url'),
             'classes': ('collapse',)
         }),
-        ('Vaqtlar', {
+        ('Даты и время', {
             'fields': ('created_at', 'updated_at', 'last_login', 'date_joined'),
             'classes': ('collapse',)
         }),

@@ -257,6 +257,9 @@ class ForgotPasswordView(views.APIView):
             else:
                 reset_url = f"{request.scheme}://{request.get_host()}/api/v1/accounts/reset-password/?token={token}"
             
+            email_sent = False
+            email_error = None
+            
             try:
                 send_mail(
                     subject='Сброс пароля - Rating Profi',
@@ -265,16 +268,26 @@ class ForgotPasswordView(views.APIView):
                     recipient_list=[email],
                     fail_silently=False,
                 )
+                email_sent = True
             except Exception as e:
-                # Email yuborishda xatolik bo'lsa ham token qaytaramiz (development uchun)
-                if settings.DEBUG:
+                email_error = str(e)
+                # DEBUG rejimida ham email yuborishga harakat qilamiz, lekin xatolik bo'lsa token qaytaramiz
+            
+            # DEBUG rejimida email yuborilgan yoki xatolik bo'lsa ham token qaytaramiz
+            if settings.DEBUG:
+                if email_sent:
                     return Response({
-                        'message': 'Email не отправлен (ошибка). В режиме DEBUG токен показан ниже.',
-                        'token': token,
-                        'reset_url': reset_url
+                        'message': 'Ссылка для сброса пароля отправлена на email.',
                     }, status=status.HTTP_200_OK)
+                else:
+                    return Response({
+                        'message': f'Email не отправлен (ошибка: {email_error}).',
+                    }, status=status.HTTP_200_OK)
+            
+            # Production rejimida
+            if not email_sent:
                 return Response({
-                    'error': 'Ошибка отправки email'
+                    'error': f'Ошибка отправки email: {email_error}'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             return Response({

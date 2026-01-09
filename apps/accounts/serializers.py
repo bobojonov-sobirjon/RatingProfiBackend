@@ -337,12 +337,6 @@ class ForgotPasswordSerializer(serializers.Serializer):
         required=True,
         help_text="Email адрес"
     )
-    
-    def validate_email(self, value):
-        """Email mavjudligini tekshirish"""
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Пользователь с таким email не найден")
-        return value
 
 
 class ResetPasswordSerializer(serializers.Serializer):
