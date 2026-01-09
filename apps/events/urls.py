@@ -5,6 +5,7 @@ from .views import (
     RatingPageView,
     ReviewsPageView,
     ReportsAnalyticsView,
+    AllReportsView,
 )
 
 urlpatterns = [
@@ -13,4 +14,5 @@ urlpatterns = [
     path('ratings/', RatingPageView.as_view(), name='rating-page'),
     path('reviews/', ReviewsPageView.as_view(), name='reviews-page'),
     path('reports/', ReportsAnalyticsView.as_view(), name='reports-analytics'),
+    path('reports/all/', AllReportsView.as_view(), name='all-reports'),
 ]

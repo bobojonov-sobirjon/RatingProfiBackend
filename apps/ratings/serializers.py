@@ -1,6 +1,12 @@
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from .models import QuestionnaireRating
+from apps.accounts.serializers import (
+    DesignerQuestionnaireSerializer,
+    RepairQuestionnaireSerializer,
+    SupplierQuestionnaireSerializer,
+    MediaQuestionnaireSerializer,
+)
 
 
 class QuestionnaireRatingCreateSerializer(serializers.Serializer):
@@ -35,6 +41,7 @@ class QuestionnaireRatingSerializer(serializers.ModelSerializer):
         source='get_status_display',
         read_only=True
     )
+    questionnaire = serializers.SerializerMethodField()
     
     @extend_schema_field(str)
     def get_reviewer_name(self, obj):
@@ -43,6 +50,38 @@ class QuestionnaireRatingSerializer(serializers.ModelSerializer):
     @extend_schema_field(str)
     def get_reviewer_phone(self, obj):
         return obj.reviewer.phone
+    
+    @extend_schema_field(dict)
+    def get_questionnaire(self, obj):
+        """Role va questionnaire_id bo'yicha to'liq questionnaire ma'lumotlarini olish"""
+        # Agar skip_questionnaire=True bo'lsa, questionnaire'ni qaytarmaymiz (recursive muammoni oldini olish uchun)
+        if self.context.get('skip_questionnaire', False):
+            return None
+        
+        from apps.accounts.models import (
+            DesignerQuestionnaire,
+            RepairQuestionnaire,
+            SupplierQuestionnaire,
+            MediaQuestionnaire,
+        )
+        
+        try:
+            if obj.role == 'Дизайн':
+                questionnaire = DesignerQuestionnaire.objects.get(id=obj.questionnaire_id)
+                return DesignerQuestionnaireSerializer(questionnaire).data
+            elif obj.role == 'Ремонт':
+                questionnaire = RepairQuestionnaire.objects.get(id=obj.questionnaire_id)
+                return RepairQuestionnaireSerializer(questionnaire).data
+            elif obj.role == 'Поставщик':
+                questionnaire = SupplierQuestionnaire.objects.get(id=obj.questionnaire_id)
+                return SupplierQuestionnaireSerializer(questionnaire).data
+            elif obj.role == 'Медиа':
+                questionnaire = MediaQuestionnaire.objects.get(id=obj.questionnaire_id)
+                return MediaQuestionnaireSerializer(questionnaire).data
+            else:
+                return None
+        except Exception:
+            return None
     
     class Meta:
         model = QuestionnaireRating
@@ -53,6 +92,7 @@ class QuestionnaireRatingSerializer(serializers.ModelSerializer):
             'reviewer_phone',
             'role',
             'questionnaire_id',
+            'questionnaire',
             'is_positive',
             'is_constructive',
             'text',

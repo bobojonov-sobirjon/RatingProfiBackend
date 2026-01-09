@@ -1,12 +1,450 @@
 from rest_framework import serializers
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_field, OpenApiTypes
+from drf_spectacular.types import OpenApiTypes
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.conf import settings
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from django.urls import reverse
+from django.utils.crypto import get_random_string
+from django.utils import timezone
+from datetime import timedelta
 from .models import SMSVerificationCode, DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire, MediaQuestionnaire
 from .utils import send_sms_via_smsaero, generate_sms_code
-from django.utils import timezone
 
 User = get_user_model()
+
+
+class RegisterSerializer(serializers.Serializer):
+    """
+    Registratsiya - telefon, email, parol, first_name, last_name, groups
+    """
+    phone = serializers.CharField(
+        max_length=20,
+        required=True,
+        help_text="Телефонный номер (например: +79991234567)"
+    )
+    email = serializers.EmailField(
+        required=True,
+        help_text="Email адрес"
+    )
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        min_length=8,
+        help_text="Пароль (минимум 8 символов)"
+    )
+    first_name = serializers.CharField(
+        max_length=150,
+        required=False,
+        allow_blank=True,
+        help_text="Имя"
+    )
+    last_name = serializers.CharField(
+        max_length=150,
+        required=False,
+        allow_blank=True,
+        help_text="Фамилия"
+    )
+    groups = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Group.objects.all(),
+        required=False,
+        help_text="Список ID групп (массив чисел)"
+    )
+    
+    def validate_phone(self, value):
+        """Telefon raqamini tozalash va tekshirish"""
+        clean_phone = ''.join(filter(str.isdigit, value))
+        
+        if len(clean_phone) < 9:
+            raise serializers.ValidationError("Телефонный номер слишком короткий")
+        if len(clean_phone) > 15:
+            raise serializers.ValidationError("Телефонный номер слишком длинный")
+        
+        # Telefon raqami allaqachon mavjudligini tekshirish
+        if User.objects.filter(phone=clean_phone).exists():
+            raise serializers.ValidationError("Пользователь с таким телефоном уже существует")
+        
+        return clean_phone
+    
+    def validate_email(self, value):
+        """Email allaqachon mavjudligini tekshirish"""
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Пользователь с таким email уже существует")
+        return value
+    
+    def validate_groups(self, value):
+        """Groups tekshirish"""
+        if value:
+            # Har bir group mavjudligini tekshirish
+            group_ids = [g.id for g in value]
+            existing_groups = Group.objects.filter(id__in=group_ids)
+            if existing_groups.count() != len(group_ids):
+                raise serializers.ValidationError("Одна или несколько групп не найдены")
+        return value
+    
+    def create(self, validated_data):
+        phone = validated_data['phone']
+        email = validated_data['email']
+        password = validated_data['password']
+        first_name = validated_data.get('first_name', '')
+        last_name = validated_data.get('last_name', '')
+        groups = validated_data.get('groups', [])
+        
+        # User yaratish
+        user = User.objects.create_user(
+            phone=phone,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            is_phone_verified=False,  # SMS kod kiritilgandan keyin True bo'ladi
+        )
+        
+        # Groups qo'shish
+        if groups:
+            user.groups.set(groups)
+        
+        # SMS kod yuborish
+        code = generate_sms_code()
+        SMSVerificationCode.objects.filter(
+            phone=phone,
+            is_used=False
+        ).update(is_used=True)
+        
+        sms_code = SMSVerificationCode.objects.create(
+            phone=phone,
+            code=code
+        )
+        
+        # SMS yuborish
+        clean_phone = ''.join(filter(str.isdigit, phone))
+        is_uzbekistan = clean_phone.startswith('998')
+        
+        if not is_uzbekistan:
+            try:
+                send_sms_via_smsaero(phone, code)
+            except Exception:
+                pass  # SMS yuborishda xatolik bo'lsa ham davom etamiz
+        
+        return sms_code
+
+
+class LoginSerializer(serializers.Serializer):
+    """
+    Login - telefon/email + parol
+    """
+    login = serializers.CharField(
+        required=True,
+        help_text="Телефон или email"
+    )
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        help_text="Пароль"
+    )
+    
+    def validate(self, attrs):
+        login = attrs['login']
+        password = attrs['password']
+        
+        # Telefon yoki email bo'yicha user topish
+        clean_login = login.strip()
+        
+        # Email formatini tekshirish
+        is_email = '@' in clean_login
+        
+        if is_email:
+            try:
+                user = User.objects.get(email=clean_login)
+            except User.DoesNotExist:
+                raise serializers.ValidationError({
+                    'login': 'Пользователь с таким email не найден'
+                })
+        else:
+            # Telefon formatini tozalash
+            clean_phone = ''.join(filter(str.isdigit, clean_login))
+            try:
+                user = User.objects.get(phone=clean_phone)
+            except User.DoesNotExist:
+                raise serializers.ValidationError({
+                    'login': 'Пользователь с таким телефоном не найден'
+                })
+        
+        # Parolni tekshirish
+        if not user.check_password(password):
+            raise serializers.ValidationError({
+                'password': 'Неверный пароль'
+            })
+        
+        if not user.is_active:
+            raise serializers.ValidationError({
+                'login': 'Аккаунт деактивирован'
+            })
+        
+        attrs['user'] = user
+        return attrs
+
+
+class CheckPhoneSerializer(serializers.Serializer):
+    """
+    Telefon raqamini tekshirish va SMS yuborish
+    """
+    phone = serializers.CharField(
+        max_length=20,
+        required=True,
+        help_text="Телефонный номер"
+    )
+    
+    def validate_phone(self, value):
+        """Telefon raqamini tozalash va tekshirish"""
+        clean_phone = ''.join(filter(str.isdigit, value))
+        if not clean_phone:
+            raise serializers.ValidationError("Неверный формат телефона")
+        return clean_phone
+
+
+class VerifyLoginCodeSerializer(serializers.Serializer):
+    """
+    SMS kodni tekshirish va telefonni tasdiqlash
+    """
+    phone = serializers.CharField(
+        max_length=20,
+        required=True,
+        help_text="Телефонный номер"
+    )
+    code = serializers.CharField(
+        max_length=6,
+        required=True,
+        help_text="SMS код"
+    )
+    
+    def validate_phone(self, value):
+        """Telefon raqamini tozalash"""
+        clean_phone = ''.join(filter(str.isdigit, value))
+        if not clean_phone:
+            raise serializers.ValidationError("Неверный формат телефона")
+        return clean_phone
+    
+    def validate(self, attrs):
+        phone = attrs['phone']
+        code = attrs['code']
+        
+        # User topish
+        try:
+            user = User.objects.get(phone=phone)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({
+                'phone': 'Пользователь с таким телефоном не найден'
+            })
+        
+        # SMS kodni tekshirish
+        try:
+            sms_code = SMSVerificationCode.objects.get(
+                phone=phone,
+                code=code,
+                is_used=False
+            )
+        except SMSVerificationCode.DoesNotExist:
+            raise serializers.ValidationError({
+                'code': 'Неверный код или код уже использован'
+            })
+        
+        # Kod muddati tugaganligini tekshirish
+        if not sms_code.is_valid():
+            raise serializers.ValidationError({
+                'code': 'Код истек. Запросите новый код.'
+            })
+        
+        # Kodni ishlatilgan deb belgilash
+        sms_code.is_used = True
+        sms_code.save()
+        
+        # Telefonni tasdiqlash
+        user.is_phone_verified = True
+        user.save()
+        
+        attrs['user'] = user
+        return attrs
+
+
+class NewPhoneLoginSerializer(serializers.Serializer):
+    """
+    Yangi login - telefon + parol (parol bo'sh bo'lishi mumkin)
+    """
+    phone = serializers.CharField(
+        max_length=20,
+        required=True,
+        help_text="Телефонный номер"
+    )
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Пароль (может быть пустым для новых пользователей)"
+    )
+    
+    def validate_phone(self, value):
+        """Telefon raqamini tozalash"""
+        clean_phone = ''.join(filter(str.isdigit, value))
+        if not clean_phone:
+            raise serializers.ValidationError("Неверный формат телефона")
+        return clean_phone
+    
+    def validate(self, attrs):
+        phone = attrs['phone']
+        password = attrs.get('password', '')
+        
+        # User topish
+        try:
+            user = User.objects.get(phone=phone)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({
+                'phone': 'Пользователь с таким телефоном не найден'
+            })
+        
+        # User aktivligini tekshirish
+        if not user.is_active:
+            raise serializers.ValidationError({
+                'phone': 'Аккаунт деактивирован'
+            })
+        
+        # Agar user parol o'rnatgan bo'lsa, parol talab qilinadi
+        if user.has_usable_password():
+            if not password:
+                raise serializers.ValidationError({
+                    'password': 'Пароль обязателен для этого пользователя'
+                })
+            # Parolni tekshirish
+            if not user.check_password(password):
+                raise serializers.ValidationError({
+                    'password': 'Неверный пароль'
+                })
+        # Agar parol o'rnatilmagan bo'lsa (yangi user), parol bo'sh bo'lishi mumkin
+        
+        attrs['user'] = user
+        return attrs
+
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    """
+    Parolni unutish - email orqali
+    """
+    email = serializers.EmailField(
+        required=True,
+        help_text="Email адрес"
+    )
+    
+    def validate_email(self, value):
+        """Email mavjudligini tekshirish"""
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Пользователь с таким email не найден")
+        return value
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """
+    Parolni tiklash - token + yangi parol
+    """
+    token = serializers.CharField(
+        required=True,
+        help_text="Токен для сброса пароля"
+    )
+    new_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        min_length=8,
+        help_text="Новый пароль (минимум 8 символов)"
+    )
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """
+    Parolni o'zgartirish - eski + yangi parol
+    """
+    old_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        help_text="Старый пароль"
+    )
+    new_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        min_length=8,
+        help_text="Новый пароль (минимум 8 символов)"
+    )
+    
+    def validate_old_password(self, value):
+        """Eski parolni tekshirish"""
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Неверный старый пароль")
+        return value
+
+
+class ChangePhoneNumberSerializer(serializers.Serializer):
+    """
+    Telefon raqamini o'zgartirish - yangi raqam
+    """
+    new_phone = serializers.CharField(
+        max_length=20,
+        required=True,
+        help_text="Новый телефонный номер"
+    )
+    
+    def validate_new_phone(self, value):
+        """Yangi telefon raqamini tozalash va tekshirish"""
+        clean_phone = ''.join(filter(str.isdigit, value))
+        
+        if len(clean_phone) < 9:
+            raise serializers.ValidationError("Телефонный номер слишком короткий")
+        if len(clean_phone) > 15:
+            raise serializers.ValidationError("Телефонный номер слишком длинный")
+        
+        # Yangi telefon raqami allaqachon mavjudligini tekshirish
+        if User.objects.filter(phone=clean_phone).exists():
+            raise serializers.ValidationError("Пользователь с таким телефоном уже существует")
+        
+        return clean_phone
+
+
+class VerifyPhoneCodeSerializer(serializers.Serializer):
+    """
+    SMS kodni tasdiqlash - telefon va kod
+    """
+    phone = serializers.CharField(
+        max_length=20,
+        required=True,
+        help_text="Телефонный номер"
+    )
+    code = serializers.CharField(
+        max_length=6,
+        required=True,
+        help_text="SMS код"
+    )
+    
+    def validate_phone(self, value):
+        """Telefon raqamini tozalash"""
+        return ''.join(filter(str.isdigit, value))
+
+
+class VerifyPhoneChangeSerializer(serializers.Serializer):
+    """
+    Telefon raqamini o'zgartirish - SMS kodni tasdiqlash
+    """
+    new_phone = serializers.CharField(
+        max_length=20,
+        required=True,
+        help_text="Новый телефонный номер"
+    )
+    code = serializers.CharField(
+        max_length=6,
+        required=True,
+        help_text="SMS код"
+    )
 
 
 class PhoneLoginSerializer(serializers.Serializer):
@@ -180,46 +618,25 @@ class AdminLoginSerializer(serializers.Serializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     """
     Foydalanuvchi profil serializer
+    Faqat: first_name, last_name, phone, email, photo
     """
-    role_display = serializers.CharField(
-        source='get_role_display',
-        read_only=True
+    photo = serializers.ImageField(
+        required=False,
+        allow_null=True,
+        help_text="Фото пользователя"
     )
     
     class Meta:
         model = User
         fields = [
-            'id',
+            'first_name',
+            'last_name',
             'phone',
-            'role',
-            'role_display',
-            'full_name',
+            'email',
             'photo',
-            'description',
-            'city',
-            'address',
-            'website',
-            'telegram',
-            'instagram',
-            'vk',
-            'company_name',
-            'inn',
-            'product_categories',
-            'brands',
-            'team_name',
-            'work_types',
-            'cooperation_terms',
-            'is_profile_completed',
-            'is_active_profile',
-            'created_at',
         ]
         read_only_fields = [
-            'id',
-            'phone',
-            'role',
-            'is_profile_completed',
-            'is_active_profile',
-            'created_at',
+            'phone',  # Telefon raqamini o'zgartirish alohida API orqali
         ]
 
 
@@ -282,6 +699,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
     terms_of_cooperation = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
     rating_list = serializers.SerializerMethodField()
+    reviews_list = serializers.SerializerMethodField()
     
     @extend_schema_field(str)
     def get_request_name(self, obj):
@@ -290,21 +708,46 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
     @extend_schema_field(dict)
     def get_rating_count(self, obj):
         """Rating count: total, positive, constructive"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_cache = self.context.get('ratings_cache', {})
+        key = f"Дизайн_{obj.id}"
+        if key in ratings_cache:
+            stats = ratings_cache[key]
+            return {
+                'total': stats['total_positive'],
+                'positive': stats['total_positive'],
+                'constructive': stats['total_constructive'],
+            }
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
         from apps.ratings.models import QuestionnaireRating
         ratings = QuestionnaireRating.objects.filter(
             role='Дизайн',
             questionnaire_id=obj.id,
             status='approved'
         )
+        positive_count = ratings.filter(is_positive=True).count()
         return {
-            'total': ratings.count(),
-            'positive': ratings.filter(is_positive=True).count(),
+            'total': positive_count,
+            'positive': positive_count,
             'constructive': ratings.filter(is_constructive=True).count(),
         }
     
     @extend_schema_field(list)
     def get_rating_list(self, obj):
         """Rating list - barcha approved rating'lar"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_list_cache = self.context.get('ratings_list_cache', {})
+        rating_serializer = self.context.get('rating_serializer')
+        key = f"Дизайн_{obj.id}"
+        if key in ratings_list_cache and rating_serializer:
+            ratings = sorted(ratings_list_cache[key], key=lambda x: x.created_at, reverse=True)
+            # skip_questionnaire=True qo'yamiz, chunki recursive muammo bo'lmasligi uchun
+            context = self.context.copy()
+            context['skip_questionnaire'] = True
+            return rating_serializer(ratings, many=True, context=context).data
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
         from apps.ratings.models import QuestionnaireRating
         from apps.ratings.serializers import QuestionnaireRatingSerializer
         ratings = QuestionnaireRating.objects.filter(
@@ -312,7 +755,33 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             questionnaire_id=obj.id,
             status='approved'
         ).order_by('-created_at')
-        return QuestionnaireRatingSerializer(ratings, many=True).data
+        context = {'skip_questionnaire': True}
+        return QuestionnaireRatingSerializer(ratings, many=True, context=context).data
+    
+    @extend_schema_field(list)
+    def get_reviews_list(self, obj):
+        """Reviews list - faqat approved review'lar (pending va rejected tashqari)"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_list_cache = self.context.get('ratings_list_cache', {})
+        rating_serializer = self.context.get('rating_serializer')
+        key = f"Дизайн_{obj.id}"
+        if key in ratings_list_cache and rating_serializer:
+            reviews = sorted(ratings_list_cache[key], key=lambda x: x.created_at, reverse=True)
+            # skip_questionnaire=True qo'yamiz, chunki recursive muammo bo'lmasligi uchun
+            context = self.context.copy()
+            context['skip_questionnaire'] = True
+            return rating_serializer(reviews, many=True, context=context).data
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
+        from apps.ratings.models import QuestionnaireRating
+        from apps.ratings.serializers import QuestionnaireRatingSerializer
+        reviews = QuestionnaireRating.objects.filter(
+            role='Дизайн',
+            questionnaire_id=obj.id,
+            status='approved'  # Faqat approved review'lar
+        ).order_by('-created_at')
+        context = {'skip_questionnaire': True}
+        return QuestionnaireRatingSerializer(reviews, many=True, context=context).data
     
     @extend_schema_field(list)
     def get_about_company(self, obj):
@@ -473,6 +942,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             'terms_of_cooperation',
             'rating_count',
             'rating_list',
+            'reviews_list',
             'data_processing_consent',
             'photo',
             'created_at',
@@ -527,6 +997,7 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
     terms_of_cooperation = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
     rating_list = serializers.SerializerMethodField()
+    reviews_list = serializers.SerializerMethodField()
     
     @extend_schema_field(str)
     def get_request_name(self, obj):
@@ -535,21 +1006,46 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
     @extend_schema_field(dict)
     def get_rating_count(self, obj):
         """Rating count: total, positive, constructive"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_cache = self.context.get('ratings_cache', {})
+        key = f"Ремонт_{obj.id}"
+        if key in ratings_cache:
+            stats = ratings_cache[key]
+            return {
+                'total': stats['total_positive'],
+                'positive': stats['total_positive'],
+                'constructive': stats['total_constructive'],
+            }
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
         from apps.ratings.models import QuestionnaireRating
         ratings = QuestionnaireRating.objects.filter(
             role='Ремонт',
             questionnaire_id=obj.id,
             status='approved'
         )
+        positive_count = ratings.filter(is_positive=True).count()
         return {
-            'total': ratings.count(),
-            'positive': ratings.filter(is_positive=True).count(),
+            'total': positive_count,
+            'positive': positive_count,
             'constructive': ratings.filter(is_constructive=True).count(),
         }
     
     @extend_schema_field(list)
     def get_rating_list(self, obj):
         """Rating list - barcha approved rating'lar"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_list_cache = self.context.get('ratings_list_cache', {})
+        rating_serializer = self.context.get('rating_serializer')
+        key = f"Ремонт_{obj.id}"
+        if key in ratings_list_cache and rating_serializer:
+            ratings = sorted(ratings_list_cache[key], key=lambda x: x.created_at, reverse=True)
+            # skip_questionnaire=True qo'yamiz, chunki recursive muammo bo'lmasligi uchun
+            context = self.context.copy()
+            context['skip_questionnaire'] = True
+            return rating_serializer(ratings, many=True, context=context).data
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
         from apps.ratings.models import QuestionnaireRating
         from apps.ratings.serializers import QuestionnaireRatingSerializer
         ratings = QuestionnaireRating.objects.filter(
@@ -557,7 +1053,33 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             questionnaire_id=obj.id,
             status='approved'
         ).order_by('-created_at')
-        return QuestionnaireRatingSerializer(ratings, many=True).data
+        context = {'skip_questionnaire': True}
+        return QuestionnaireRatingSerializer(ratings, many=True, context=context).data
+    
+    @extend_schema_field(list)
+    def get_reviews_list(self, obj):
+        """Reviews list - faqat approved review'lar (pending va rejected tashqari)"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_list_cache = self.context.get('ratings_list_cache', {})
+        rating_serializer = self.context.get('rating_serializer')
+        key = f"Ремонт_{obj.id}"
+        if key in ratings_list_cache and rating_serializer:
+            reviews = sorted(ratings_list_cache[key], key=lambda x: x.created_at, reverse=True)
+            # skip_questionnaire=True qo'yamiz, chunki recursive muammo bo'lmasligi uchun
+            context = self.context.copy()
+            context['skip_questionnaire'] = True
+            return rating_serializer(reviews, many=True, context=context).data
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
+        from apps.ratings.models import QuestionnaireRating
+        from apps.ratings.serializers import QuestionnaireRatingSerializer
+        reviews = QuestionnaireRating.objects.filter(
+            role='Ремонт',
+            questionnaire_id=obj.id,
+            status='approved'  # Faqat approved review'lar
+        ).order_by('-created_at')
+        context = {'skip_questionnaire': True}
+        return QuestionnaireRatingSerializer(reviews, many=True, context=context).data
     
     @extend_schema_field(list)
     def get_about_company(self, obj):
@@ -704,6 +1226,7 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             'terms_of_cooperation',
             'rating_count',
             'rating_list',
+            'reviews_list',
             'data_processing_consent',
             'company_logo',
             'legal_entity_card',
@@ -751,6 +1274,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
     terms_of_cooperation = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
     rating_list = serializers.SerializerMethodField()
+    reviews_list = serializers.SerializerMethodField()
     
     @extend_schema_field(str)
     def get_request_name(self, obj):
@@ -759,21 +1283,46 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
     @extend_schema_field(dict)
     def get_rating_count(self, obj):
         """Rating count: total, positive, constructive"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_cache = self.context.get('ratings_cache', {})
+        key = f"Поставщик_{obj.id}"
+        if key in ratings_cache:
+            stats = ratings_cache[key]
+            return {
+                'total': stats['total_positive'],
+                'positive': stats['total_positive'],
+                'constructive': stats['total_constructive'],
+            }
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
         from apps.ratings.models import QuestionnaireRating
         ratings = QuestionnaireRating.objects.filter(
             role='Поставщик',
             questionnaire_id=obj.id,
             status='approved'
         )
+        positive_count = ratings.filter(is_positive=True).count()
         return {
-            'total': ratings.count(),
-            'positive': ratings.filter(is_positive=True).count(),
+            'total': positive_count,
+            'positive': positive_count,
             'constructive': ratings.filter(is_constructive=True).count(),
         }
     
     @extend_schema_field(list)
     def get_rating_list(self, obj):
         """Rating list - barcha approved rating'lar"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_list_cache = self.context.get('ratings_list_cache', {})
+        rating_serializer = self.context.get('rating_serializer')
+        key = f"Поставщик_{obj.id}"
+        if key in ratings_list_cache and rating_serializer:
+            ratings = sorted(ratings_list_cache[key], key=lambda x: x.created_at, reverse=True)
+            # skip_questionnaire=True qo'yamiz, chunki recursive muammo bo'lmasligi uchun
+            context = self.context.copy()
+            context['skip_questionnaire'] = True
+            return rating_serializer(ratings, many=True, context=context).data
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
         from apps.ratings.models import QuestionnaireRating
         from apps.ratings.serializers import QuestionnaireRatingSerializer
         ratings = QuestionnaireRating.objects.filter(
@@ -781,7 +1330,33 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             questionnaire_id=obj.id,
             status='approved'
         ).order_by('-created_at')
-        return QuestionnaireRatingSerializer(ratings, many=True).data
+        context = {'skip_questionnaire': True}
+        return QuestionnaireRatingSerializer(ratings, many=True, context=context).data
+    
+    @extend_schema_field(list)
+    def get_reviews_list(self, obj):
+        """Reviews list - faqat approved review'lar (pending va rejected tashqari)"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_list_cache = self.context.get('ratings_list_cache', {})
+        rating_serializer = self.context.get('rating_serializer')
+        key = f"Поставщик_{obj.id}"
+        if key in ratings_list_cache and rating_serializer:
+            reviews = sorted(ratings_list_cache[key], key=lambda x: x.created_at, reverse=True)
+            # skip_questionnaire=True qo'yamiz, chunki recursive muammo bo'lmasligi uchun
+            context = self.context.copy()
+            context['skip_questionnaire'] = True
+            return rating_serializer(reviews, many=True, context=context).data
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
+        from apps.ratings.models import QuestionnaireRating
+        from apps.ratings.serializers import QuestionnaireRatingSerializer
+        reviews = QuestionnaireRating.objects.filter(
+            role='Поставщик',
+            questionnaire_id=obj.id,
+            status='approved'  # Faqat approved review'lar
+        ).order_by('-created_at')
+        context = {'skip_questionnaire': True}
+        return QuestionnaireRatingSerializer(reviews, many=True, context=context).data
     
     @extend_schema_field(list)
     def get_about_company(self, obj):
@@ -928,6 +1503,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             'terms_of_cooperation',
             'rating_count',
             'rating_list',
+            'reviews_list',
             'data_processing_consent',
             'company_logo',
             'legal_entity_card',
@@ -965,6 +1541,7 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
     )
     rating_count = serializers.SerializerMethodField()
     rating_list = serializers.SerializerMethodField()
+    reviews_list = serializers.SerializerMethodField()
     
     @extend_schema_field(str)
     def get_request_name(self, obj):
@@ -973,21 +1550,46 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
     @extend_schema_field(dict)
     def get_rating_count(self, obj):
         """Rating count: total, positive, constructive"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_cache = self.context.get('ratings_cache', {})
+        key = f"Медиа_{obj.id}"
+        if key in ratings_cache:
+            stats = ratings_cache[key]
+            return {
+                'total': stats['total_positive'],
+                'positive': stats['total_positive'],
+                'constructive': stats['total_constructive'],
+            }
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
         from apps.ratings.models import QuestionnaireRating
         ratings = QuestionnaireRating.objects.filter(
             role='Медиа',
             questionnaire_id=obj.id,
             status='approved'
         )
+        positive_count = ratings.filter(is_positive=True).count()
         return {
-            'total': ratings.count(),
-            'positive': ratings.filter(is_positive=True).count(),
+            'total': positive_count,
+            'positive': positive_count,
             'constructive': ratings.filter(is_constructive=True).count(),
         }
     
     @extend_schema_field(list)
     def get_rating_list(self, obj):
         """Rating list - barcha approved rating'lar"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_list_cache = self.context.get('ratings_list_cache', {})
+        rating_serializer = self.context.get('rating_serializer')
+        key = f"Медиа_{obj.id}"
+        if key in ratings_list_cache and rating_serializer:
+            ratings = sorted(ratings_list_cache[key], key=lambda x: x.created_at, reverse=True)
+            # skip_questionnaire=True qo'yamiz, chunki recursive muammo bo'lmasligi uchun
+            context = self.context.copy()
+            context['skip_questionnaire'] = True
+            return rating_serializer(ratings, many=True, context=context).data
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
         from apps.ratings.models import QuestionnaireRating
         from apps.ratings.serializers import QuestionnaireRatingSerializer
         ratings = QuestionnaireRating.objects.filter(
@@ -995,7 +1597,33 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
             questionnaire_id=obj.id,
             status='approved'
         ).order_by('-created_at')
-        return QuestionnaireRatingSerializer(ratings, many=True).data
+        context = {'skip_questionnaire': True}
+        return QuestionnaireRatingSerializer(ratings, many=True, context=context).data
+    
+    @extend_schema_field(list)
+    def get_reviews_list(self, obj):
+        """Reviews list - faqat approved review'lar (pending va rejected tashqari)"""
+        # Context'dan cache'dan olish (agar mavjud bo'lsa)
+        ratings_list_cache = self.context.get('ratings_list_cache', {})
+        rating_serializer = self.context.get('rating_serializer')
+        key = f"Медиа_{obj.id}"
+        if key in ratings_list_cache and rating_serializer:
+            reviews = sorted(ratings_list_cache[key], key=lambda x: x.created_at, reverse=True)
+            # skip_questionnaire=True qo'yamiz, chunki recursive muammo bo'lmasligi uchun
+            context = self.context.copy()
+            context['skip_questionnaire'] = True
+            return rating_serializer(reviews, many=True, context=context).data
+        
+        # Agar context yo'q bo'lsa, eski usul (fallback)
+        from apps.ratings.models import QuestionnaireRating
+        from apps.ratings.serializers import QuestionnaireRatingSerializer
+        reviews = QuestionnaireRating.objects.filter(
+            role='Медиа',
+            questionnaire_id=obj.id,
+            status='approved'  # Faqat approved review'lar
+        ).order_by('-created_at')
+        context = {'skip_questionnaire': True}
+        return QuestionnaireRatingSerializer(reviews, many=True, context=context).data
     
     status_display = serializers.CharField(
         source='get_status_display',
@@ -1032,6 +1660,7 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
             'vat_payment_display',
             'rating_count',
             'rating_list',
+            'reviews_list',
             'additional_info',
             'created_at',
             'updated_at',

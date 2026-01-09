@@ -1,7 +1,13 @@
 from django.urls import path
 from .views import (
-    SendSMSCodeView,
-    VerifySMSCodeView,
+    CheckPhoneView,
+    VerifyLoginCodeView,
+    LoginView,
+    ForgotPasswordView,
+    ResetPasswordView,
+    ChangePasswordView,
+    ChangePhoneNumberView,
+    VerifyPhoneChangeView,
     AdminLoginView,
     UserProfileView,
     UserPublicProfileView,
@@ -31,8 +37,15 @@ from .views import (
 )
 
 urlpatterns = [
-    path('login/', SendSMSCodeView.as_view(), name='send-sms'),
-    path('verify-sms/', VerifySMSCodeView.as_view(), name='verify-sms'),
+    # Yangi autentifikatsiya
+    path('login/check-phone/', CheckPhoneView.as_view(), name='check-phone'),
+    path('login/verify-code/', VerifyLoginCodeView.as_view(), name='verify-login-code'),
+    path('login/', LoginView.as_view(), name='login'),
+    path('forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
+    path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
+    path('change-password/', ChangePasswordView.as_view(), name='change-password'),
+    path('change-phone/', ChangePhoneNumberView.as_view(), name='change-phone'),
+    path('verify-phone-change/', VerifyPhoneChangeView.as_view(), name='verify-phone-change'),
     path('login-admin/', AdminLoginView.as_view(), name='admin-login'),
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('users/', UserListView.as_view(), name='user-list'),

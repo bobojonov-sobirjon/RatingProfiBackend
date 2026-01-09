@@ -468,18 +468,57 @@ class RatingPageView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
+        import time
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        start_time = time.time()
+        logger.info(f"[RATINGS API] Starting request at {time.time()}")
+        
         from apps.ratings.models import QuestionnaireRating
         from apps.accounts.models import DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire, MediaQuestionnaire
-        
-        # Barcha anketalarni olish va rating'lar bilan birlashtirish
-        result = []
+        from django.db.models import Count, Q
+        from django.db import connection
         
         # Фильтры
         group_filter = request.query_params.get('group')
         search = request.query_params.get('search')
         ordering = request.query_params.get('ordering', '-total_rating_count')
         
+        initial_queries = len(connection.queries)
+        logger.info(f"[RATINGS API] Initial queries: {initial_queries}")
+        
+        # Barcha approved rating'larni bir marta olish va cache qilish
+        logger.info(f"[RATINGS API] Fetching all ratings...")
+        all_ratings = QuestionnaireRating.objects.filter(status='approved').select_related('reviewer')
+        ratings_list = list(all_ratings)
+        logger.info(f"[RATINGS API] Fetched {len(ratings_list)} ratings. Queries: {len(connection.queries) - initial_queries}")
+        
+        # Rating'larni role va questionnaire_id bo'yicha guruhlash
+        logger.info(f"[RATINGS API] Building ratings cache...")
+        ratings_cache = {}
+        ratings_list_cache = {}  # rating_list va reviews_list uchun
+        for rating in ratings_list:
+            key = f"{rating.role}_{rating.questionnaire_id}"
+            if key not in ratings_cache:
+                ratings_cache[key] = {
+                    'total_positive': 0,
+                    'total_constructive': 0,
+                }
+                ratings_list_cache[key] = []
+            if rating.is_positive:
+                ratings_cache[key]['total_positive'] += 1
+            if rating.is_constructive:
+                ratings_cache[key]['total_constructive'] += 1
+            # Rating list uchun
+            ratings_list_cache[key].append(rating)
+        
+        logger.info(f"[RATINGS API] Cache built. Keys: {len(ratings_cache)}. Queries: {len(connection.queries) - initial_queries}")
+        
+        result = []
+        
         # DesignerQuestionnaire
+        logger.info(f"[RATINGS API] Fetching designers...")
         designers = DesignerQuestionnaire.objects.filter(status='published', is_moderation=True)
         if group_filter and group_filter != 'Дизайн':
             designers = designers.none()
@@ -489,24 +528,30 @@ class RatingPageView(views.APIView):
                 django_models.Q(brand_name__icontains=search)
             )
         
-        from apps.ratings.models import QuestionnaireRating
-        for designer in designers:
-            ratings = QuestionnaireRating.objects.filter(
-                role='Дизайн',
-                questionnaire_id=designer.id,
-                status='approved'
-            )
+        designers_list = list(designers)
+        logger.info(f"[RATINGS API] Found {len(designers_list)} designers. Queries: {len(connection.queries) - initial_queries}")
+        
+        for idx, designer in enumerate(designers_list):
+            if idx % 10 == 0:
+                logger.info(f"[RATINGS API] Processing designer {idx+1}/{len(designers_list)}. Queries: {len(connection.queries) - initial_queries}")
+            key = f"Дизайн_{designer.id}"
+            rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
+            
+            # Faqat kerakli field'lar
             result.append({
                 'request_name': 'DesignerQuestionnaire',
                 'id': designer.id,
                 'name': designer.full_name,
                 'group': 'Дизайн',
-                'total_rating_count': ratings.count(),
-                'positive_rating_count': ratings.filter(is_positive=True).count(),
-                'constructive_rating_count': ratings.filter(is_constructive=True).count(),
+                'total_rating_count': rating_stats['total_positive'],
+                'positive_rating_count': rating_stats['total_positive'],
+                'constructive_rating_count': rating_stats['total_constructive'],
             })
         
+        logger.info(f"[RATINGS API] Designers processed. Queries: {len(connection.queries) - initial_queries}")
+        
         # RepairQuestionnaire
+        logger.info(f"[RATINGS API] Fetching repairs...")
         repairs = RepairQuestionnaire.objects.filter(status='published', is_moderation=True)
         if group_filter and group_filter != 'Ремонт':
             repairs = repairs.none()
@@ -516,23 +561,30 @@ class RatingPageView(views.APIView):
                 django_models.Q(brand_name__icontains=search)
             )
         
-        for repair in repairs:
-            ratings = QuestionnaireRating.objects.filter(
-                role='Ремонт',
-                questionnaire_id=repair.id,
-                status='approved'
-            )
+        repairs_list = list(repairs)
+        logger.info(f"[RATINGS API] Found {len(repairs_list)} repairs. Queries: {len(connection.queries) - initial_queries}")
+        
+        for idx, repair in enumerate(repairs_list):
+            if idx % 10 == 0:
+                logger.info(f"[RATINGS API] Processing repair {idx+1}/{len(repairs_list)}. Queries: {len(connection.queries) - initial_queries}")
+            key = f"Ремонт_{repair.id}"
+            rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
+            
+            # Faqat kerakli field'lar
             result.append({
                 'request_name': 'RepairQuestionnaire',
                 'id': repair.id,
                 'name': repair.full_name or repair.brand_name,
                 'group': 'Ремонт',
-                'total_rating_count': ratings.count(),
-                'positive_rating_count': ratings.filter(is_positive=True).count(),
-                'constructive_rating_count': ratings.filter(is_constructive=True).count(),
+                'total_rating_count': rating_stats['total_positive'],
+                'positive_rating_count': rating_stats['total_positive'],
+                'constructive_rating_count': rating_stats['total_constructive'],
             })
         
+        logger.info(f"[RATINGS API] Repairs processed. Queries: {len(connection.queries) - initial_queries}")
+        
         # SupplierQuestionnaire
+        logger.info(f"[RATINGS API] Fetching suppliers...")
         suppliers = SupplierQuestionnaire.objects.filter(status='published', is_moderation=True)
         if group_filter and group_filter != 'Поставщик':
             suppliers = suppliers.none()
@@ -542,23 +594,30 @@ class RatingPageView(views.APIView):
                 django_models.Q(brand_name__icontains=search)
             )
         
-        for supplier in suppliers:
-            ratings = QuestionnaireRating.objects.filter(
-                role='Поставщик',
-                questionnaire_id=supplier.id,
-                status='approved'
-            )
+        suppliers_list = list(suppliers)
+        logger.info(f"[RATINGS API] Found {len(suppliers_list)} suppliers. Queries: {len(connection.queries) - initial_queries}")
+        
+        for idx, supplier in enumerate(suppliers_list):
+            if idx % 10 == 0:
+                logger.info(f"[RATINGS API] Processing supplier {idx+1}/{len(suppliers_list)}. Queries: {len(connection.queries) - initial_queries}")
+            key = f"Поставщик_{supplier.id}"
+            rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
+            
+            # Faqat kerakli field'lar
             result.append({
                 'request_name': 'SupplierQuestionnaire',
                 'id': supplier.id,
                 'name': supplier.full_name or supplier.brand_name,
                 'group': 'Поставщик',
-                'total_rating_count': ratings.count(),
-                'positive_rating_count': ratings.filter(is_positive=True).count(),
-                'constructive_rating_count': ratings.filter(is_constructive=True).count(),
+                'total_rating_count': rating_stats['total_positive'],
+                'positive_rating_count': rating_stats['total_positive'],
+                'constructive_rating_count': rating_stats['total_constructive'],
             })
         
+        logger.info(f"[RATINGS API] Suppliers processed. Queries: {len(connection.queries) - initial_queries}")
+        
         # MediaQuestionnaire
+        logger.info(f"[RATINGS API] Fetching media...")
         media = MediaQuestionnaire.objects.filter(status='published', is_moderation=True)
         if group_filter and group_filter != 'Медиа':
             media = media.none()
@@ -568,40 +627,51 @@ class RatingPageView(views.APIView):
                 django_models.Q(brand_name__icontains=search)
             )
         
-        for media_item in media:
-            ratings = QuestionnaireRating.objects.filter(
-                role='Медиа',
-                questionnaire_id=media_item.id,
-                status='approved'
-            )
+        media_list = list(media)
+        logger.info(f"[RATINGS API] Found {len(media_list)} media. Queries: {len(connection.queries) - initial_queries}")
+        
+        for idx, media_item in enumerate(media_list):
+            if idx % 10 == 0:
+                logger.info(f"[RATINGS API] Processing media {idx+1}/{len(media_list)}. Queries: {len(connection.queries) - initial_queries}")
+            key = f"Медиа_{media_item.id}"
+            rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
+            
+            # Faqat kerakli field'lar
             result.append({
                 'request_name': 'MediaQuestionnaire',
                 'id': media_item.id,
                 'name': media_item.full_name or media_item.brand_name,
                 'group': 'Медиа',
-                'total_rating_count': ratings.count(),
-                'positive_rating_count': ratings.filter(is_positive=True).count(),
-                'constructive_rating_count': ratings.filter(is_constructive=True).count(),
+                'total_rating_count': rating_stats['total_positive'],
+                'positive_rating_count': rating_stats['total_positive'],
+                'constructive_rating_count': rating_stats['total_constructive'],
             })
+        
+        logger.info(f"[RATINGS API] Media processed. Queries: {len(connection.queries) - initial_queries}")
         
         # Сортировка
         reverse_order = ordering.startswith('-')
         sort_key = ordering.lstrip('-')
         
         if sort_key == 'total_rating_count':
-            result.sort(key=lambda x: x['total_rating_count'], reverse=reverse_order)
+            result.sort(key=lambda x: x.get('total_rating_count', 0), reverse=reverse_order)
         elif sort_key == 'positive_rating_count':
-            result.sort(key=lambda x: x['positive_rating_count'], reverse=reverse_order)
+            result.sort(key=lambda x: x.get('positive_rating_count', 0), reverse=reverse_order)
         elif sort_key == 'constructive_rating_count':
-            result.sort(key=lambda x: x['constructive_rating_count'], reverse=reverse_order)
+            result.sort(key=lambda x: x.get('constructive_rating_count', 0), reverse=reverse_order)
         else:
-            result.sort(key=lambda x: x['total_rating_count'], reverse=True)
+            result.sort(key=lambda x: x.get('total_rating_count', 0), reverse=True)
         
         # Pagination
+        logger.info(f"[RATINGS API] Total results before pagination: {len(result)}. Queries: {len(connection.queries) - initial_queries}")
         paginator = LimitOffsetPagination()
         paginator.default_limit = 20
         paginator.max_limit = 100
         page = paginator.paginate_queryset(result, request)
+        
+        elapsed_time = time.time() - start_time
+        total_queries = len(connection.queries) - initial_queries
+        logger.info(f"[RATINGS API] Completed in {elapsed_time:.2f} seconds. Total queries: {total_queries}")
         
         if page is not None:
             return paginator.get_paginated_response(page)
@@ -667,10 +737,23 @@ class ReviewsPageView(views.APIView):
                 django_models.Q(reviewer__phone__icontains=search)
             )
         
-        # Сортировка
+        # Сортировка: pending review'lar doim tepada
+        from django.db.models import Case, When, IntegerField
+        queryset = queryset.annotate(
+            status_priority=Case(
+                When(status='pending', then=0),
+                default=1,
+                output_field=IntegerField()
+            )
+        )
+        
         ordering = request.query_params.get('ordering', '-created_at')
         if ordering:
-            queryset = queryset.order_by(ordering)
+            # Avval status_priority bo'yicha (pending=0, qolganlari=1), keyin ordering bo'yicha
+            queryset = queryset.order_by('status_priority', ordering)
+        else:
+            # Agar ordering ko'rsatilmagan bo'lsa, faqat status_priority va created_at bo'yicha
+            queryset = queryset.order_by('status_priority', '-created_at')
         
         # Pagination
         paginator = LimitOffsetPagination()
@@ -872,3 +955,180 @@ class ReportsAnalyticsView(views.APIView):
                 'end_date': end_date_str or end_date.strftime('%Y-%m-%d')
             }
         }, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Reports'],
+    summary='Получить все отчеты',
+    description='''
+    GET: Получить список всех отчетов (Report model)
+    
+    Возвращает список всех отчетов с информацией:
+    - name: Название организации ФИ (full_name пользователя)
+    - group: Группа (role display: Дизайнер, Ремонт, Поставщик, Медиа)
+    - start_date: Дата начала периода (формат: DD.MM.YYYY)
+    - next_payment_date: Следующая оплата / Дата окончания периода (формат: DD.MM.YYYY)
+    
+    Фильтры:
+    - user_id: Фильтр по ID пользователя
+    - start_date: Фильтр по дате начала (формат: YYYY-MM-DD)
+    - end_date: Фильтр по дате окончания (формат: YYYY-MM-DD)
+    - search: Поиск по телефону или имени пользователя
+    
+    Требуется аутентификация.
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='user_id',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по ID пользователя',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='start_date',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по дате начала (формат: YYYY-MM-DD)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='end_date',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по дате окончания (формат: YYYY-MM-DD)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='search',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Поиск по телефону пользователя',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='ordering',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Сортировка (created_at, -created_at, start_date, -start_date)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='limit',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Количество результатов на странице',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='offset',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Смещение для пагинации',
+            required=False,
+        ),
+    ],
+    responses={
+        200: {'description': 'Список всех отчетов'},
+        400: {'description': 'Ошибка валидации'}
+    }
+)
+class AllReportsView(views.APIView):
+    """
+    Получить все отчеты
+    GET /api/v1/events/reports/all/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        from apps.accounts.models import Report
+        from django.contrib.auth import get_user_model
+        from datetime import datetime
+        
+        User = get_user_model()
+        
+        # Фильтры
+        user_id = request.query_params.get('user_id')
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        search = request.query_params.get('search')
+        ordering = request.query_params.get('ordering', '-created_at')
+        
+        # Queryset
+        queryset = Report.objects.select_related('user').all()
+        
+        # Фильтр по user_id
+        if user_id:
+            try:
+                queryset = queryset.filter(user_id=int(user_id))
+            except ValueError:
+                return Response(
+                    {'error': 'Неверный формат user_id'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Фильтр по start_date
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                queryset = queryset.filter(start_date=start_date)
+            except ValueError:
+                return Response(
+                    {'error': 'Неверный формат даты. Используйте формат YYYY-MM-DD'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Фильтр по end_date
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                queryset = queryset.filter(end_date=end_date)
+            except ValueError:
+                return Response(
+                    {'error': 'Неверный формат даты. Используйте формат YYYY-MM-DD'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Поиск по телефону или имени
+        if search:
+            queryset = queryset.filter(
+                django_models.Q(user__phone__icontains=search) |
+                django_models.Q(user__full_name__icontains=search)
+            )
+        
+        # Сортировка
+        valid_ordering = ['created_at', '-created_at', 'start_date', '-start_date', 
+                         'end_date', '-end_date', 'updated_at', '-updated_at']
+        if ordering in valid_ordering:
+            queryset = queryset.order_by(ordering)
+        else:
+            queryset = queryset.order_by('-created_at')
+        
+        # Пагинация
+        paginator = LimitOffsetPagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+        
+        # Сериализация
+        results = []
+        for report in paginated_queryset:
+            # Role display uchun
+            role_display_map = {
+                'designer': 'Дизайнер',
+                'repair': 'Ремонт',
+                'supplier': 'Поставщик',
+                'media': 'Медиа',
+                'admin': 'Администратор',
+            }
+            group = role_display_map.get(report.user.role, report.user.role)
+            
+            # Full name olish
+            name = report.user.full_name or report.user.phone or 'Не указано'
+            
+            results.append({
+                'name': name,
+                'group': group,
+                'start_date': report.start_date.strftime('%d.%m.%Y'),
+                'next_payment_date': report.end_date.strftime('%d.%m.%Y'),
+            })
+        
+        return paginator.get_paginated_response(results)

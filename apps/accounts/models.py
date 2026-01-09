@@ -590,6 +590,12 @@ class RepairQuestionnaire(models.Model):
         max_length=255,
         verbose_name='Название бренда (дополнительно в скобках укажите полное юридическое наименование компании)'
     )
+    phone = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        verbose_name='Телефон'
+    )
     email = models.EmailField(
         verbose_name='E-mail'
     )
@@ -1080,6 +1086,12 @@ class MediaQuestionnaire(models.Model):
     brand_name = models.CharField(
         max_length=255,
         verbose_name='Название бренда'
+    )
+    phone = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        verbose_name='Телефон'
     )
     email = models.EmailField(
         verbose_name='E-mail'

@@ -6,12 +6,25 @@ from rest_framework.pagination import LimitOffsetPagination
 from django.contrib.auth import get_user_model, models as auth_models
 from django.db import models as django_models
 from django.utils import timezone
+from django.core.mail import send_mail
+from django.conf import settings
+from django.urls import reverse
+from django.utils.crypto import get_random_string
+from datetime import date, timedelta
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .serializers import (
-    PhoneLoginSerializer,
-    VerifySMSCodeSerializer,
     AdminLoginSerializer,
+    LoginSerializer,
+    CheckPhoneSerializer,
+    VerifyLoginCodeSerializer,
+    NewPhoneLoginSerializer,
+    ForgotPasswordSerializer,
+    ResetPasswordSerializer,
+    ChangePasswordSerializer,
+    ChangePhoneNumberSerializer,
+    VerifyPhoneChangeSerializer,
+    VerifyPhoneCodeSerializer,
     UserProfileSerializer,
     UserPublicSerializer,
     DesignerQuestionnaireSerializer,
@@ -22,92 +35,524 @@ from .serializers import (
     GroupSerializer,
 )
 from .models import SMSVerificationCode, DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire, MediaQuestionnaire, Report
+from .utils import send_sms_via_smsaero, generate_sms_code
 
 User = get_user_model()
+
+# Password reset tokenlarni saqlash uchun dict (production'da cache yoki DB ishlatish kerak)
+PASSWORD_RESET_TOKENS = {}
 
 
 @extend_schema(
     tags=['Authentification'],
-    request=PhoneLoginSerializer,
-    responses={200: {'description': 'SMS kod yuborildi'}}
-)
-class SendSMSCodeView(views.APIView):
-    """
-    SMS kod yuborish
-    POST /api/v1/accounts/login/
-    {
-        "phone": "+79991234567"
+    summary='Проверка телефона и отправка SMS',
+    description='''
+    POST: Проверка телефона и отправка SMS кода
+    
+    Request body:
+    - phone: Телефонный номер
+    
+    Если is_phone_verified = False, отправляется SMS код.
+    ''',
+    request=CheckPhoneSerializer,
+    responses={
+        200: {'description': 'Успешная проверка'},
+        400: {'description': 'Ошибка валидации'}
     }
+)
+class CheckPhoneView(views.APIView):
+    """
+    Telefon raqamini tekshirish va SMS yuborish
+    POST /api/v1/accounts/login/check-phone/
     """
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        serializer = PhoneLoginSerializer(data=request.data)
+        serializer = CheckPhoneSerializer(data=request.data)
         if serializer.is_valid():
-            sms_code = serializer.save()
             phone = serializer.validated_data['phone']
             
-            # O'zbekiston raqamlari uchun SMS kodini response'ga qo'shish
-            clean_phone = ''.join(filter(str.isdigit, phone))
-            is_uzbekistan = clean_phone.startswith('998')
+            # User topish yoki yaratish
+            try:
+                user = User.objects.get(phone=phone)
+            except User.DoesNotExist:
+                # Yangi user yaratish
+                user = User.objects.create_user(
+                    phone=phone,
+                    password=None,  # Parol keyinroq o'rnatiladi
+                    role='designer',  # Default role (keyinroq o'zgartiriladi)
+                    is_phone_verified=False,
+                    is_active=True,
+                )
             
-            response_data = {
-                'message': 'SMS код отправлен',
-                'phone': phone
-            }
-            
-            # O'zbekiston raqamlari uchun SMS kodini qo'shamiz
-            if is_uzbekistan:
-                response_data['code'] = sms_code.code
-                response_data['note'] = 'Для узбекских номеров код отправлен в ответе'
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+            # Agar is_phone_verified False bo'lsa, SMS yuborish
+            if not user.is_phone_verified:
+                # SMS kod yaratish
+                code = generate_sms_code()
+                
+                # Eski kodlarni bekor qilish
+                SMSVerificationCode.objects.filter(
+                    phone=phone,
+                    is_used=False
+                ).update(is_used=True)
+                
+                # Yangi kod yaratish
+                sms_code = SMSVerificationCode.objects.create(
+                    phone=phone,
+                    code=code
+                )
+                
+                # SMS yuborish
+                clean_phone = ''.join(filter(str.isdigit, phone))
+                is_uzbekistan = clean_phone.startswith('998')
+                
+                if not is_uzbekistan:
+                    try:
+                        send_sms_via_smsaero(phone, code)
+                    except Exception:
+                        pass  # SMS yuborishda xatolik bo'lsa ham davom etamiz
+                
+                return Response({
+                    'phone': phone,
+                    'is_phone_verified': False
+                }, status=status.HTTP_200_OK)
+            else:
+                # Telefon allaqachon tasdiqlangan
+                return Response({
+                    'phone': phone,
+                    'is_phone_verified': True
+                }, status=status.HTTP_200_OK)
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @extend_schema(
     tags=['Authentification'],
-    request=VerifySMSCodeSerializer,
-    responses={200: {'description': 'Muvaffaqiyatli kirildi'}}
-)
-class VerifySMSCodeView(views.APIView):
-    """
-    SMS kodni tekshirish va token olish
-    POST /api/v1/accounts/verify-sms/
-    {
-        "phone": "+79991234567",
-        "code": "1234"
+    summary='Проверка SMS кода',
+    description='''
+    POST: Проверка SMS кода и подтверждение телефона
+    
+    Request body:
+    - phone: Телефонный номер
+    - code: SMS код
+    
+    После успешной проверки is_phone_verified = True.
+    ''',
+    request=VerifyLoginCodeSerializer,
+    responses={
+        200: {'description': 'Код подтвержден'},
+        400: {'description': 'Ошибка валидации'}
     }
+)
+class VerifyLoginCodeView(views.APIView):
+    """
+    SMS kodni tekshirish va telefonni tasdiqlash
+    POST /api/v1/accounts/login/verify-code/
     """
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        serializer = VerifySMSCodeSerializer(data=request.data)
+        serializer = VerifyLoginCodeSerializer(data=request.data)
         if serializer.is_valid():
-            phone = serializer.validated_data['phone']
+            user = serializer.validated_data['user']
             
-            # Foydalanuvchini topish
-            try:
-                user = User.objects.get(phone=phone)
-                # Foydalanuvchi mavjud, yangilash
-                user.is_phone_verified = True
-                user.save()
-            except User.DoesNotExist:
-                # Foydalanuvchi mavjud emas
-                return Response(
-                    {'error': 'Пользователь не найден. Обратитесь к администратору для создания аккаунта.'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+            return Response({
+                'phone': user.phone,
+                'is_phone_verified': user.is_phone_verified
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    tags=['Authentification'],
+    summary='Вход на платформу (телефон + пароль)',
+    description='''
+    POST: Вход на платформу
+    
+    Request body:
+    - phone: Телефонный номер
+    - password: Пароль (может быть пустым для новых пользователей)
+    
+    Возвращает access_token и refresh_token.
+    ''',
+    request=NewPhoneLoginSerializer,
+    responses={
+        200: {'description': 'Успешный вход'},
+        400: {'description': 'Ошибка валидации'}
+    }
+)
+class LoginView(views.APIView):
+    """
+    Login - telefon + parol (parol bo'sh bo'lishi mumkin)
+    POST /api/v1/accounts/login/
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = NewPhoneLoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
             
             # JWT token yaratish
             refresh = RefreshToken.for_user(user)
             
             return Response({
-                'message': 'Успешный вход',
-                'tokens': {
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                }
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    tags=['Authentification'],
+    summary='Забыл пароль - отправка ссылки на email',
+    description='''
+    POST: Запрос на сброс пароля
+    
+    Request body:
+    - email: Email адрес
+    
+    На указанный email отправляется ссылка для сброса пароля.
+    ''',
+    request=ForgotPasswordSerializer,
+    responses={
+        200: {'description': 'Ссылка для сброса пароля отправлена на email'},
+        400: {'description': 'Ошибка валидации'}
+    }
+)
+class ForgotPasswordView(views.APIView):
+    """
+    Parolni unutish - email orqali
+    POST /api/v1/accounts/forgot-password/
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = ForgotPasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                # Xavfsizlik uchun har doim muvaffaqiyatli javob qaytaramiz
+                return Response({
+                    'message': 'Если пользователь с таким email существует, ссылка для сброса пароля отправлена.'
+                }, status=status.HTTP_200_OK)
+            
+            # Token yaratish
+            token = get_random_string(length=64)
+            PASSWORD_RESET_TOKENS[token] = {
+                'user_id': user.id,
+                'expires_at': timezone.now() + timedelta(hours=24)
+            }
+            
+            # Email yuborish
+            # Frontend URL ni olish (agar mavjud bo'lsa)
+            frontend_url = getattr(settings, 'FRONTEND_URL', None)
+            if frontend_url:
+                reset_url = f"{frontend_url}/reset-password?token={token}"
+            else:
+                reset_url = f"{request.scheme}://{request.get_host()}/api/v1/accounts/reset-password/?token={token}"
+            
+            try:
+                send_mail(
+                    subject='Сброс пароля - Rating Profi',
+                    message=f'Для сброса пароля перейдите по ссылке: {reset_url}',
+                    from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@ratingprofi.ru',
+                    recipient_list=[email],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                # Email yuborishda xatolik bo'lsa ham token qaytaramiz (development uchun)
+                if settings.DEBUG:
+                    return Response({
+                        'message': 'Email не отправлен (ошибка). В режиме DEBUG токен показан ниже.',
+                        'token': token,
+                        'reset_url': reset_url
+                    }, status=status.HTTP_200_OK)
+                return Response({
+                    'error': 'Ошибка отправки email'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            return Response({
+                'message': 'Ссылка для сброса пароля отправлена на email'
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    tags=['Authentification'],
+    summary='Сброс пароля по токену',
+    description='''
+    POST: Сброс пароля по токену из email ссылки
+    
+    Query параметры:
+    - token: Токен из email ссылки (можно передать в URL или в body)
+    
+    Request body:
+    - token: Токен из email ссылки (если не передан в URL)
+    - new_password: Новый пароль (минимум 8 символов)
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='token',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Токен из email ссылки',
+            required=False,
+        ),
+    ],
+    request=ResetPasswordSerializer,
+    responses={
+        200: {'description': 'Пароль успешно изменен'},
+        400: {'description': 'Ошибка валидации (неверный или истекший токен)'}
+    }
+)
+class ResetPasswordView(views.APIView):
+    """
+    Parolni tiklash - token orqali
+    POST /api/v1/accounts/reset-password/?token=xxx
+    yoki
+    POST /api/v1/accounts/reset-password/
+    {
+        "token": "xxx",
+        "new_password": "newpass123"
+    }
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        # Token ni query parametrdan yoki body'dan olish
+        token = request.query_params.get('token') or request.data.get('token')
+        
+        if not token:
+            return Response({
+                'error': 'Токен не указан'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Serializer data
+        data = request.data.copy()
+        if 'token' not in data:
+            data['token'] = token
+        
+        serializer = ResetPasswordSerializer(data=data)
+        if serializer.is_valid():
+            token = serializer.validated_data['token']
+            new_password = serializer.validated_data['new_password']
+            
+            # Token tekshirish
+            if token not in PASSWORD_RESET_TOKENS:
+                return Response({
+                    'error': 'Неверный или истекший токен'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            token_data = PASSWORD_RESET_TOKENS[token]
+            
+            # Token muddati tekshirish
+            if timezone.now() > token_data['expires_at']:
+                del PASSWORD_RESET_TOKENS[token]
+                return Response({
+                    'error': 'Токен истек. Запросите новый.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # User topish va parolni o'zgartirish
+            try:
+                user = User.objects.get(id=token_data['user_id'])
+            except User.DoesNotExist:
+                del PASSWORD_RESET_TOKENS[token]
+                return Response({
+                    'error': 'Пользователь не найден'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Parolni o'zgartirish
+            user.set_password(new_password)
+            user.save()
+            
+            # Tokenni o'chirish
+            del PASSWORD_RESET_TOKENS[token]
+            
+            return Response({
+                'message': 'Пароль успешно изменен'
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    tags=['Authentification'],
+    summary='Изменить пароль',
+    description='''
+    POST: Изменить пароль (требуется аутентификация)
+    
+    Request body:
+    - old_password: Старый пароль
+    - new_password: Новый пароль (минимум 8 символов)
+    ''',
+    request=ChangePasswordSerializer,
+    responses={
+        200: {'description': 'Пароль успешно изменен'},
+        400: {'description': 'Ошибка валидации'}
+    }
+)
+class ChangePasswordView(views.APIView):
+    """
+    Parolni o'zgartirish - eski + yangi parol
+    POST /api/v1/accounts/change-password/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            user = request.user
+            new_password = serializer.validated_data['new_password']
+            
+            # Parolni o'zgartirish
+            user.set_password(new_password)
+            user.save()
+            
+            return Response({
+                'message': 'Пароль успешно изменен'
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    tags=['Authentification'],
+    summary='Изменить номер телефона - запрос SMS кода',
+    description='''
+    POST: Запрос на изменение номера телефона
+    
+    Request body:
+    - new_phone: Новый телефонный номер
+    
+    На новый номер отправляется SMS код для подтверждения.
+    ''',
+    request=ChangePhoneNumberSerializer,
+    responses={
+        200: {'description': 'SMS код отправлен на новый номер'},
+        400: {'description': 'Ошибка валидации'}
+    }
+)
+class ChangePhoneNumberView(views.APIView):
+    """
+    Telefon raqamini o'zgartirish - yangi raqamga SMS kod yuborish
+    POST /api/v1/accounts/change-phone/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        serializer = ChangePhoneNumberSerializer(data=request.data)
+        if serializer.is_valid():
+            new_phone = serializer.validated_data['new_phone']
+            
+            # SMS kod yuborish
+            code = generate_sms_code()
+            SMSVerificationCode.objects.filter(
+                phone=new_phone,
+                is_used=False
+            ).update(is_used=True)
+            
+            sms_code = SMSVerificationCode.objects.create(
+                phone=new_phone,
+                code=code
+            )
+            
+            # SMS yuborish
+            clean_phone = ''.join(filter(str.isdigit, new_phone))
+            is_uzbekistan = clean_phone.startswith('998')
+            
+            response_data = {
+                'message': 'SMS код отправлен на новый номер телефона',
+                'new_phone': new_phone
+            }
+            
+            if not is_uzbekistan:
+                try:
+                    send_sms_via_smsaero(new_phone, code)
+                except Exception:
+                    pass
+            else:
+                response_data['code'] = sms_code.code
+                response_data['note'] = 'Для узбекских номеров код отправлен в ответе'
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(
+    tags=['Authentification'],
+    summary='Подтверждение изменения номера телефона',
+    description='''
+    POST: Подтверждение изменения номера телефона SMS кодом
+    
+    Request body:
+    - new_phone: Новый телефонный номер
+    - code: SMS код
+    
+    После подтверждения номер телефона изменяется.
+    ''',
+    request=VerifyPhoneChangeSerializer,
+    responses={
+        200: {'description': 'Номер телефона успешно изменен'},
+        400: {'description': 'Ошибка валидации'}
+    }
+)
+class VerifyPhoneChangeView(views.APIView):
+    """
+    Telefon raqamini o'zgartirish - SMS kodni tasdiqlash
+    POST /api/v1/accounts/verify-phone-change/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        serializer = VerifyPhoneChangeSerializer(data=request.data)
+        if serializer.is_valid():
+            new_phone = serializer.validated_data['new_phone']
+            code = serializer.validated_data['code']
+            
+            # SMS kodni tekshirish
+            clean_phone = ''.join(filter(str.isdigit, new_phone))
+            
+            try:
+                sms_code = SMSVerificationCode.objects.get(
+                    phone=clean_phone,
+                    code=code,
+                    is_used=False
+                )
+            except SMSVerificationCode.DoesNotExist:
+                return Response({
+                    'error': 'Неверный код'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Kod amal qiladimi tekshirish
+            if not sms_code.is_valid():
+                return Response({
+                    'error': 'Срок действия кода истек'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Kodni ishlatilgan deb belgilash
+            sms_code.is_used = True
+            sms_code.save()
+            
+            # Telefon raqamini o'zgartirish
+            user = request.user
+            old_phone = user.phone
+            user.phone = clean_phone
+            user.username = clean_phone  # username ham o'zgartirish kerak
+            user.is_phone_verified = True
+            user.save()
+            
+            return Response({
+                'message': 'Номер телефона успешно изменен',
+                'old_phone': old_phone,
+                'new_phone': clean_phone
             }, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -346,6 +791,18 @@ class UserListView(views.APIView):
 
 @extend_schema(
     tags=['Accounts'],
+    summary='Профиль пользователя',
+    description='''
+    GET: Получить профиль текущего пользователя
+    PUT: Обновить профиль текущего пользователя
+    
+    Поля:
+    - first_name: Имя
+    - last_name: Фамилия
+    - phone: Телефон (только для чтения)
+    - email: Email
+    - photo: Фото (ImageField, multipart/form-data)
+    ''',
     responses={
         200: UserProfileSerializer,
         400: {'description': 'Ошибка валидации'}
@@ -364,7 +821,16 @@ class UserProfileView(views.APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @extend_schema(
-        request=UserProfileSerializer,
+        summary='Обновить профиль',
+        description='''
+        Обновить профиль пользователя.
+        
+        Для загрузки фото используйте multipart/form-data.
+        ''',
+        request={
+            'multipart/form-data': UserProfileSerializer,
+            'application/json': UserProfileSerializer,
+        },
         responses={
             200: UserProfileSerializer,
             400: {'description': 'Ошибка валидации'}
@@ -1276,7 +1742,7 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
       * factory - Фабрика
     - full_name: ФИО
     - full_name_en: ФИ на английском
-    - phone: Номер телефона
+    - phone: Номер телефона (необязательное)
     - birth_date: Дата рождения (формат: YYYY-MM-DD)
     - email: E-mail
     - city: Город проживания
@@ -1395,6 +1861,7 @@ class DesignerQuestionnaireDetailView(views.APIView):
       * exhibition_hall - Выставочный зал
       * factory - Фабрика
     - full_name: ФИО (обязательное)
+    - phone: Номер телефона (необязательное)
     - brand_name: Название бренда (дополнительно в скобках укажите полное юридическое наименование компании) (обязательное)
     - email: E-mail (обязательное)
     - responsible_person: Имя, должность и контактный номер ответственного лица (обязательное)
@@ -1770,6 +2237,7 @@ class RepairQuestionnaireListView(views.APIView):
       * exhibition_hall - Выставочный зал
       * factory - Фабрика
     - full_name: ФИО
+    - phone: Номер телефона
     - brand_name: Название бренда (дополнительно в скобках укажите полное юридическое наименование компании)
     - email: E-mail
     - responsible_person: Имя, должность и контактный номер ответственного лица
@@ -2225,6 +2693,7 @@ class RepairQuestionnaireStatusUpdateView(views.APIView):
       * factory - Фабрика
       * salon - Салон
     - full_name: ФИО (обязательное)
+    - phone: Номер телефона (необязательное)
     - brand_name: Название бренда (дополнительно в скобках укажите полное юридическое наименование компании) (обязательное)
     - email: E-mail (обязательное)
     - responsible_person: Имя, должность и контактный номер ответственного лица (обязательное)
@@ -2563,6 +3032,7 @@ class SupplierQuestionnaireListView(views.APIView):
       * factory - Фабрика
       * salon - Салон
     - full_name: ФИО
+    - phone: Номер телефона
     - brand_name: Название бренда (дополнительно в скобках укажите полное юридическое наименование компании)
     - email: E-mail
     - responsible_person: Имя, должность и контактный номер ответственного лица
@@ -3228,44 +3698,60 @@ class DesignerQuestionnaireModerationView(views.APIView):
         
         questionnaire = self.get_object(pk)
         
-        # Проверка phone
+        # Проверка email и phone
+        if not questionnaire.email:
+            return Response(
+                {'error': 'Email не заполнен. Необходимо заполнить email перед модерацией.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         if not questionnaire.phone:
             return Response(
                 {'error': 'Телефон не заполнен. Необходимо заполнить телефон перед модерацией.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Создание или получение User
         # Очищаем phone от + и пробелов для поиска
         clean_phone = ''.join(filter(str.isdigit, questionnaire.phone))
         
-        try:
-            user = User.objects.get(phone=clean_phone)
-            # Если пользователь уже существует, обновляем роль если нужно
-            if user.role != 'designer':
-                user.role = 'designer'
-                user.save()
-        except User.DoesNotExist:
-            # Создаем нового пользователя через create_user для правильной установки username
+        # Проверка существования пользователя с таким email ИЛИ phone
+        existing_user_by_email = User.objects.filter(email=questionnaire.email).first()
+        existing_user_by_phone = User.objects.filter(phone=clean_phone).first()
+        
+        # Если пользователь существует, используем его, иначе создаем нового
+        if existing_user_by_email:
+            user = existing_user_by_email
+        elif existing_user_by_phone:
+            user = existing_user_by_phone
+        else:
+            # Создаем нового пользователя через create_user с email
             user = User.objects.create_user(
                 phone=clean_phone,
+                email=questionnaire.email,
                 password=None,  # Пароль не требуется для модерации
                 role='designer',
                 full_name=questionnaire.full_name,
-                is_phone_verified=True,
+                is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
         
-        # Создание Report
+        # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
         # Для Дизайн - 3 месяца
         end_date = start_date + timedelta(days=90)
         
-        Report.objects.create(
+        # Проверяем, есть ли уже активный Report для этого пользователя
+        existing_report = Report.objects.filter(
             user=user,
-            start_date=start_date,
-            end_date=end_date
-        )
+            start_date=start_date
+        ).first()
+        
+        if not existing_report:
+            Report.objects.create(
+                user=user,
+                start_date=start_date,
+                end_date=end_date
+            )
         
         # Установка is_moderation=True
         questionnaire.is_moderation = True
@@ -3320,39 +3806,60 @@ class RepairQuestionnaireModerationView(views.APIView):
         
         questionnaire = self.get_object(pk)
         
-        # Проверка phone
+        # Проверка email и phone
+        if not questionnaire.email:
+            return Response(
+                {'error': 'Email не заполнен. Необходимо заполнить email перед модерацией.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         if not questionnaire.phone:
             return Response(
                 {'error': 'Телефон не заполнен. Необходимо заполнить телефон перед модерацией.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Создание или получение User
-        user, created = User.objects.get_or_create(
-            phone=questionnaire.phone,
-            defaults={
-                'role': 'repair',
-                'full_name': questionnaire.full_name,
-                'is_phone_verified': True,
-                'is_profile_completed': True,
-            }
-        )
+        # Очищаем phone от + и пробелов для поиска
+        clean_phone = ''.join(filter(str.isdigit, questionnaire.phone))
         
-        # Если пользователь уже существует, обновляем роль если нужно
-        if not created and user.role != 'repair':
-            user.role = 'repair'
-            user.save()
+        # Проверка существования пользователя с таким email ИЛИ phone
+        existing_user_by_email = User.objects.filter(email=questionnaire.email).first()
+        existing_user_by_phone = User.objects.filter(phone=clean_phone).first()
         
-        # Создание Report
+        # Если пользователь существует, используем его, иначе создаем нового
+        if existing_user_by_email:
+            user = existing_user_by_email
+        elif existing_user_by_phone:
+            user = existing_user_by_phone
+        else:
+            # Создаем нового пользователя через create_user с email
+            user = User.objects.create_user(
+                phone=clean_phone,
+                email=questionnaire.email,
+                password=None,  # Пароль не требуется для модерации
+                role='repair',
+                full_name=questionnaire.full_name,
+                is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
+                is_profile_completed=True,
+            )
+        
+        # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
         # Для Ремонт - 1 год
         end_date = start_date + timedelta(days=365)
         
-        Report.objects.create(
+        # Проверяем, есть ли уже активный Report для этого пользователя
+        existing_report = Report.objects.filter(
             user=user,
-            start_date=start_date,
-            end_date=end_date
-        )
+            start_date=start_date
+        ).first()
+        
+        if not existing_report:
+            Report.objects.create(
+                user=user,
+                start_date=start_date,
+                end_date=end_date
+            )
         
         # Установка is_moderation=True
         questionnaire.is_moderation = True
@@ -3407,44 +3914,60 @@ class SupplierQuestionnaireModerationView(views.APIView):
         
         questionnaire = self.get_object(pk)
         
-        # Проверка phone
+        # Проверка email и phone
+        if not questionnaire.email:
+            return Response(
+                {'error': 'Email не заполнен. Необходимо заполнить email перед модерацией.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         if not questionnaire.phone:
             return Response(
                 {'error': 'Телефон не заполнен. Необходимо заполнить телефон перед модерацией.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Создание или получение User
         # Очищаем phone от + и пробелов для поиска
         clean_phone = ''.join(filter(str.isdigit, questionnaire.phone))
         
-        try:
-            user = User.objects.get(phone=clean_phone)
-            # Если пользователь уже существует, обновляем роль если нужно
-            if user.role != 'supplier':
-                user.role = 'supplier'
-                user.save()
-        except User.DoesNotExist:
-            # Создаем нового пользователя через create_user для правильной установки username
+        # Проверка существования пользователя с таким email ИЛИ phone
+        existing_user_by_email = User.objects.filter(email=questionnaire.email).first()
+        existing_user_by_phone = User.objects.filter(phone=clean_phone).first()
+        
+        # Если пользователь существует, используем его, иначе создаем нового
+        if existing_user_by_email:
+            user = existing_user_by_email
+        elif existing_user_by_phone:
+            user = existing_user_by_phone
+        else:
+            # Создаем нового пользователя через create_user с email
             user = User.objects.create_user(
                 phone=clean_phone,
+                email=questionnaire.email,
                 password=None,  # Пароль не требуется для модерации
                 role='supplier',
                 full_name=questionnaire.full_name,
-                is_phone_verified=True,
+                is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
         
-        # Создание Report
+        # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
         # Для Поставщик - 1 год
         end_date = start_date + timedelta(days=365)
         
-        Report.objects.create(
+        # Проверяем, есть ли уже активный Report для этого пользователя
+        existing_report = Report.objects.filter(
             user=user,
-            start_date=start_date,
-            end_date=end_date
-        )
+            start_date=start_date
+        ).first()
+        
+        if not existing_report:
+            Report.objects.create(
+                user=user,
+                start_date=start_date,
+                end_date=end_date
+            )
         
         # Установка is_moderation=True
         questionnaire.is_moderation = True
@@ -3499,44 +4022,60 @@ class MediaQuestionnaireModerationView(views.APIView):
         
         questionnaire = self.get_object(pk)
         
-        # Проверка phone
+        # Проверка email и phone
+        if not questionnaire.email:
+            return Response(
+                {'error': 'Email не заполнен. Необходимо заполнить email перед модерацией.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         if not questionnaire.phone:
             return Response(
                 {'error': 'Телефон не заполнен. Необходимо заполнить телефон перед модерацией.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Создание или получение User
         # Очищаем phone от + и пробелов для поиска
         clean_phone = ''.join(filter(str.isdigit, questionnaire.phone))
         
-        try:
-            user = User.objects.get(phone=clean_phone)
-            # Если пользователь уже существует, обновляем роль если нужно
-            if user.role != 'media':
-                user.role = 'media'
-                user.save()
-        except User.DoesNotExist:
-            # Создаем нового пользователя через create_user для правильной установки username
+        # Проверка существования пользователя с таким email ИЛИ phone
+        existing_user_by_email = User.objects.filter(email=questionnaire.email).first()
+        existing_user_by_phone = User.objects.filter(phone=clean_phone).first()
+        
+        # Если пользователь существует, используем его, иначе создаем нового
+        if existing_user_by_email:
+            user = existing_user_by_email
+        elif existing_user_by_phone:
+            user = existing_user_by_phone
+        else:
+            # Создаем нового пользователя через create_user с email
             user = User.objects.create_user(
                 phone=clean_phone,
+                email=questionnaire.email,
                 password=None,  # Пароль не требуется для модерации
                 role='media',
                 full_name=questionnaire.full_name,
-                is_phone_verified=True,
+                is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
         
-        # Создание Report
+        # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
         # Для Медиа - 1 год
         end_date = start_date + timedelta(days=365)
         
-        Report.objects.create(
+        # Проверяем, есть ли уже активный Report для этого пользователя
+        existing_report = Report.objects.filter(
             user=user,
-            start_date=start_date,
-            end_date=end_date
-        )
+            start_date=start_date
+        ).first()
+        
+        if not existing_report:
+            Report.objects.create(
+                user=user,
+                start_date=start_date,
+                end_date=end_date
+            )
         
         # Установка is_moderation=True
         questionnaire.is_moderation = True
