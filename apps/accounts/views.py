@@ -1674,13 +1674,10 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
         cities_list.insert(2, {'value': 'Любые города онлайн', 'label': 'Любые города онлайн'})
         
         # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
-        # Эконом, Комфорт, Бизнесс, Примиум, Хорика
+        # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
         segments = [
-            {'value': 'economy', 'label': 'Эконом'},
-            {'value': 'comfort', 'label': 'Комфорт'},
-            {'value': 'business', 'label': 'Бизнесс'},
-            {'value': 'premium', 'label': 'Примиум'},
-            {'value': 'horeca', 'label': 'Хорика'},
+            {'value': choice[0], 'label': choice[1]} 
+            for choice in DesignerQuestionnaire.SEGMENT_CHOICES
         ]
         
         # Назначение недвижимости - Назначение недвижимости
@@ -2114,11 +2111,7 @@ class RepairQuestionnaireListView(views.APIView):
                 if vat == 'not_important':
                     # "не важно" - filter qo'llamaymiz
                     pass
-                elif vat == 'hi_home':
-                    # "hi_home" - vat_payment='yes' va magazine_cards='hi_home' yoki faqat vat_payment='yes'
-                    vat_q |= Q(vat_payment='yes')
-                elif vat == 'in_home':
-                    # "in_home" - vat_payment='yes' va magazine_cards='in_home' yoki faqat vat_payment='yes'
+                elif vat == 'yes':
                     vat_q |= Q(vat_payment='yes')
                 elif vat == 'no':
                     vat_q |= Q(vat_payment='no')
@@ -2555,21 +2548,17 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
         cities_list.insert(2, {'value': 'Любые города онлайн', 'label': 'Любые города онлайн'})
         
         # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
-        # Эконом, Комфорт, Бизнесс, Примиум, Хорика, Эксклюзив
+        # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
         segments = [
-            {'value': 'economy', 'label': 'Эконом'},
-            {'value': 'comfort', 'label': 'Комфорт'},
-            {'value': 'business', 'label': 'Бизнесс'},
-            {'value': 'premium', 'label': 'Примиум'},
-            {'value': 'horeca', 'label': 'Хорика'},
-            {'value': 'exclusive', 'label': 'Эксклюзив'},
+            {'value': choice[0], 'label': choice[1]} 
+            for choice in RepairQuestionnaire.SEGMENT_CHOICES
         ]
         
         # Наличие НДС - Наличие НДС (ko'p tanlash mumkin)
+        # Model'dan olinadi: yes, no
         vat_payments = [
-            {'value': 'hi_home', 'label': 'hi home'},
-            {'value': 'in_home', 'label': 'in home'},
-            {'value': 'no', 'label': 'нет'},
+            {'value': 'yes', 'label': 'Да'},
+            {'value': 'no', 'label': 'Нет'},
             {'value': 'not_important', 'label': 'не важно'},
         ]
         
@@ -3271,14 +3260,10 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
         cities_list.insert(2, {'value': 'Любые города онлайн', 'label': 'Любые города онлайн'})
         
         # Сегменты - Выберите сегмент (ko'p tanlash mumkin)
-        # Эконом, Комфорт, Бизнесс, Примиум, Хорика, Эксклюзив
+        # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
         segments = [
-            {'value': 'economy', 'label': 'Эконом'},
-            {'value': 'comfort', 'label': 'Комфорт'},
-            {'value': 'business', 'label': 'Бизнесс'},
-            {'value': 'premium', 'label': 'Примиум'},
-            {'value': 'horeca', 'label': 'Хорика'},
-            {'value': 'exclusive', 'label': 'Эксклюзив'},
+            {'value': choice[0], 'label': choice[1]} 
+            for choice in SupplierQuestionnaire.SEGMENT_CHOICES
         ]
         
         # Наличие НДС - Наличие НДС
