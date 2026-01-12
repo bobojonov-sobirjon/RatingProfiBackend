@@ -747,8 +747,8 @@ class UserListView(views.APIView):
             return User.objects.none()
         
         # Faqat Дизайн, Медиа, Поставщик, Ремонт role'lardagi userlar
-        allowed_roles = ['designer', 'repair', 'supplier', 'media']
-        queryset = User.objects.filter(role__in=allowed_roles)
+        allowed_roles = ['Дизайн', 'Ремонт', 'Поставщик', 'Медиа']
+        queryset = User.objects.filter(groups__name__in=allowed_roles)
         
         # По умолчанию только активные профили
         is_active_profile = self.request.query_params.get('is_active_profile')
