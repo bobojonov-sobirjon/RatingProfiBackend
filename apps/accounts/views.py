@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from datetime import date, timedelta
 from drf_spectacular.utils import extend_schema, OpenApiParameter
+from django.contrib.auth.models import Group
 
 from .serializers import (
     AdminLoginSerializer,
@@ -3742,11 +3743,11 @@ class DesignerQuestionnaireModerationView(views.APIView):
                 phone=clean_phone,
                 email=questionnaire.email,
                 password=None,  # Пароль не требуется для модерации
-                role='designer',
                 full_name=questionnaire.full_name,
                 is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
+            user.groups.add(Group.objects.get(name='Дизайн'))
         
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
@@ -3850,11 +3851,11 @@ class RepairQuestionnaireModerationView(views.APIView):
                 phone=clean_phone,
                 email=questionnaire.email,
                 password=None,  # Пароль не требуется для модерации
-                role='repair',
                 full_name=questionnaire.full_name,
                 is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
+            user.groups.add(Group.objects.get(name='Ремонт'))
         
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
@@ -3958,11 +3959,11 @@ class SupplierQuestionnaireModerationView(views.APIView):
                 phone=clean_phone,
                 email=questionnaire.email,
                 password=None,  # Пароль не требуется для модерации
-                role='supplier',
                 full_name=questionnaire.full_name,
                 is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
+            user.groups.add(Group.objects.get(name='Поставщик'))
         
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
@@ -4066,11 +4067,11 @@ class MediaQuestionnaireModerationView(views.APIView):
                 phone=clean_phone,
                 email=questionnaire.email,
                 password=None,  # Пароль не требуется для модерации
-                role='media',
                 full_name=questionnaire.full_name,
                 is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
+            user.groups.add(Group.objects.get(name='Медиа'))
         
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
