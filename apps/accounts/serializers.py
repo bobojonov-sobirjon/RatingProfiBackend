@@ -619,7 +619,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text="Фото пользователя"
     )
-    gr
+
     groups = serializers.SerializerMethodField()
     
     def get_groups(self, obj):
