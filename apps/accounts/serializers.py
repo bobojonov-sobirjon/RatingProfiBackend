@@ -619,6 +619,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text="Фото пользователя"
     )
+    gr
+    groups = serializers.SerializerMethodField()
+    
+    def get_groups(self, obj):
+        return obj.groups.values_list('name', flat=True)
     
     class Meta:
         model = User
@@ -628,6 +633,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'phone',
             'email',
             'photo',
+            'groups',
         ]
         read_only_fields = [
             'phone',  # Telefon raqamini o'zgartirish alohida API orqali
@@ -644,12 +650,20 @@ class UserPublicSerializer(serializers.ModelSerializer):
         read_only=True
     )
     
+    groups = serializers.SerializerMethodField()
+    
+    def get_groups(self, obj):
+        return obj.groups.values_list('name', flat=True)
+    
     class Meta:
         model = User
         fields = [
             'id',
             'full_name',
             'photo',
+            'groups',
+            'phone',
+            'email',
             'description',
             'city',
             'website',

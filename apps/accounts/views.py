@@ -794,10 +794,10 @@ class UserListView(views.APIView):
         page = paginator.paginate_queryset(queryset, request)
         
         if page is not None:
-            serializer = UserPublicSerializer(page, many=True)
+            serializer = UserPublicSerializer(page, many=True, context={'request': request})
             return paginator.get_paginated_response(serializer.data)
         
-        serializer = UserPublicSerializer(queryset, many=True)
+        serializer = UserPublicSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
