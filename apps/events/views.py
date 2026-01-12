@@ -1111,15 +1111,20 @@ class AllReportsView(views.APIView):
         # Сериализация
         results = []
         for report in paginated_queryset:
-            # Role display uchun
-            role_display_map = {
-                'designer': 'Дизайнер',
-                'repair': 'Ремонт',
-                'supplier': 'Поставщик',
-                'media': 'Медиа',
-                'admin': 'Администратор',
-            }
-            group = role_display_map.get(report.user.role, report.user.role)
+            # Group ni user.groups dan olish
+            user_groups = report.user.groups.all()
+            if user_groups.exists():
+                # Birinchi group nomini olish
+                group = user_groups.first().name
+            else:
+                # Agar groups bo'lmasa, role'dan olish (fallback)
+                role_display_map = {
+                    'designer': 'Дизайнер',
+                    'repair': 'Ремонт',
+                    'supplier': 'Поставщик',
+                    'media': 'Медиа'
+                }
+                group = role_display_map.get(report.user.role, report.user.role or 'Не указано')
             
             # Full name olish
             name = report.user.full_name or report.user.phone or 'Не указано'
