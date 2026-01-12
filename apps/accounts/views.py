@@ -3747,7 +3747,8 @@ class DesignerQuestionnaireModerationView(views.APIView):
                 is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
-            user.groups.add(Group.objects.get(name='Дизайн'))
+            group, _ = Group.objects.get_or_create(name='Дизайн')
+            user.groups.add(group)
         
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
@@ -3855,7 +3856,8 @@ class RepairQuestionnaireModerationView(views.APIView):
                 is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
-            user.groups.add(Group.objects.get(name='Ремонт'))
+            group, _ = Group.objects.get_or_create(name='Ремонт')
+            user.groups.add(group)
         
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
@@ -3963,7 +3965,8 @@ class SupplierQuestionnaireModerationView(views.APIView):
                 is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
-            user.groups.add(Group.objects.get(name='Поставщик'))
+            group, _ = Group.objects.get_or_create(name='Поставщик')
+            user.groups.add(group)
         
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
@@ -4071,7 +4074,8 @@ class MediaQuestionnaireModerationView(views.APIView):
                 is_phone_verified=False,  # Email bilan yaratilgani uchun phone verified emas
                 is_profile_completed=True,
             )
-            user.groups.add(Group.objects.get(name='Медиа'))
+            group, _ = Group.objects.get_or_create(name='Медиа')
+            user.groups.add(group)
         
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
