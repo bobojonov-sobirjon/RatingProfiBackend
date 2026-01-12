@@ -865,6 +865,11 @@ class ReportsAnalyticsView(views.APIView):
                 # По умолчанию - текущая дата
                 end_datetime = timezone.now()
                 end_date = end_datetime.date()
+            
+            # Agar start_date > end_date bo'lsa, ularni almashtirish
+            if start_date > end_date:
+                start_date, end_date = end_date, start_date
+                start_datetime, end_datetime = end_datetime, start_datetime
         except ValueError:
             return Response(
                 {'error': 'Неверный формат даты. Используйте формат YYYY-MM-DD'},
@@ -872,10 +877,13 @@ class ReportsAnalyticsView(views.APIView):
             )
         
         # 1. Статистика за выбранный период (period_stats) - groups bo'yicha
+        # Faqat groups'ga tegishli user'lar (Дизайн, Ремонт, Поставщик, Медиа)
+        allowed_groups = ['Дизайн', 'Ремонт', 'Поставщик', 'Медиа']
         period_users = User.objects.filter(
             created_at__gte=start_datetime,
-            created_at__lte=end_datetime
-        ).prefetch_related('groups')
+            created_at__lte=end_datetime,
+            groups__name__in=allowed_groups
+        ).prefetch_related('groups').distinct()
         
         period_stats = {
             'total': period_users.count(),
@@ -886,22 +894,24 @@ class ReportsAnalyticsView(views.APIView):
         }
         
         # 2. График по месяцам (monthly_trends) - groups bo'yicha
-        # Agar start_date va end_date berilsa, faqat shu period uchun
-        # Agar berilmasa, oxirgi 12 oy uchun
+        # Faqat groups'ga tegishli user'lar (Дизайн, Ремонт, Поставщик, Медиа)
+        allowed_groups = ['Дизайн', 'Ремонт', 'Поставщик', 'Медиа']
         if start_date_str and end_date_str:
             # Faqat berilgan period uchun
             monthly_data = User.objects.filter(
                 created_at__gte=start_datetime,
-                created_at__lte=end_datetime
-            ).prefetch_related('groups').annotate(
+                created_at__lte=end_datetime,
+                groups__name__in=allowed_groups
+            ).prefetch_related('groups').distinct().annotate(
                 month=TruncMonth('created_at')
             ).values('month', 'id').order_by('month')
         else:
             # Oxirgi 12 oy uchun
             twelve_months_ago = timezone.now() - timedelta(days=365)
             monthly_data = User.objects.filter(
-                created_at__gte=twelve_months_ago
-            ).prefetch_related('groups').annotate(
+                created_at__gte=twelve_months_ago,
+                groups__name__in=allowed_groups
+            ).prefetch_related('groups').distinct().annotate(
                 month=TruncMonth('created_at')
             ).values('month', 'id').order_by('month')
         
@@ -921,17 +931,20 @@ class ReportsAnalyticsView(views.APIView):
                 }
             
             # User'ning groups'larini olish
-            user = User.objects.get(id=user_data['id'])
-            user_groups = user.groups.values_list('name', flat=True)
-            
-            if 'Поставщик' in user_groups:
-                monthly_dict[month_str]['supplier'] += 1
-            if 'Ремонт' in user_groups:
-                monthly_dict[month_str]['repair'] += 1
-            if 'Дизайн' in user_groups:
-                monthly_dict[month_str]['design'] += 1
-            if 'Медиа' in user_groups:
-                monthly_dict[month_str]['media'] += 1
+            try:
+                user = User.objects.get(id=user_data['id'])
+                user_groups = list(user.groups.values_list('name', flat=True))
+                
+                if 'Поставщик' in user_groups:
+                    monthly_dict[month_str]['supplier'] += 1
+                if 'Ремонт' in user_groups:
+                    monthly_dict[month_str]['repair'] += 1
+                if 'Дизайн' in user_groups:
+                    monthly_dict[month_str]['design'] += 1
+                if 'Медиа' in user_groups:
+                    monthly_dict[month_str]['media'] += 1
+            except User.DoesNotExist:
+                continue
         
         # Вычисляем total для каждого месяца
         for month_str in monthly_dict:
@@ -950,18 +963,36 @@ class ReportsAnalyticsView(views.APIView):
         if start_date_str and end_date_str:
             from django.db.models.functions import TruncDate
             
-            # Har bir kun uchun ma'lumot olish
+            # Har bir kun uchun ma'lumot olish - faqat groups'ga tegishli user'lar
+            allowed_groups = ['Дизайн', 'Ремонт', 'Поставщик', 'Медиа']
             daily_data = User.objects.filter(
                 created_at__gte=start_datetime,
-                created_at__lte=end_datetime
-            ).prefetch_related('groups').annotate(
+                created_at__lte=end_datetime,
+                groups__name__in=allowed_groups
+            ).prefetch_related('groups').distinct().annotate(
                 day=TruncDate('created_at')
             ).values('day', 'id').order_by('day')
             
-            # Формируем структуру для графика по дням
+            # Avval barcha kunlar uchun bo'sh dict yaratish
             daily_dict = {}
+            current_date = start_date
+            while current_date <= end_date:
+                day_str = current_date.strftime('%Y-%m-%d')
+                daily_dict[day_str] = {
+                    'date': day_str,
+                    'supplier': 0,
+                    'repair': 0,
+                    'design': 0,
+                    'media': 0,
+                    'total': 0
+                }
+                current_date += timedelta(days=1)
+            
+            # Keyin user'lar ma'lumotlarini qo'shish
             for user_data in daily_data:
                 day_str = user_data['day'].strftime('%Y-%m-%d')
+                
+                # Agar kun dict'da bo'lmasa, yaratish (ehtimol timezone muammosi)
                 if day_str not in daily_dict:
                     daily_dict[day_str] = {
                         'date': day_str,
@@ -973,17 +1004,20 @@ class ReportsAnalyticsView(views.APIView):
                     }
                 
                 # User'ning groups'larini olish
-                user = User.objects.get(id=user_data['id'])
-                user_groups = user.groups.values_list('name', flat=True)
-                
-                if 'Поставщик' in user_groups:
-                    daily_dict[day_str]['supplier'] += 1
-                if 'Ремонт' in user_groups:
-                    daily_dict[day_str]['repair'] += 1
-                if 'Дизайн' in user_groups:
-                    daily_dict[day_str]['design'] += 1
-                if 'Медиа' in user_groups:
-                    daily_dict[day_str]['media'] += 1
+                try:
+                    user = User.objects.get(id=user_data['id'])
+                    user_groups = list(user.groups.values_list('name', flat=True))
+                    
+                    if 'Поставщик' in user_groups:
+                        daily_dict[day_str]['supplier'] += 1
+                    if 'Ремонт' in user_groups:
+                        daily_dict[day_str]['repair'] += 1
+                    if 'Дизайн' in user_groups:
+                        daily_dict[day_str]['design'] += 1
+                    if 'Медиа' in user_groups:
+                        daily_dict[day_str]['media'] += 1
+                except User.DoesNotExist:
+                    continue
             
             # Вычисляем total для каждого дня
             for day_str in daily_dict:
@@ -998,7 +1032,9 @@ class ReportsAnalyticsView(views.APIView):
             daily_trends = sorted(daily_dict.values(), key=lambda x: x['date'])
         
         # 3. Текущие общие показатели (current_totals) - всегда актуальные данные - groups bo'yicha
-        all_users = User.objects.all().prefetch_related('groups')
+        # Faqat groups'ga tegishli user'lar (Дизайн, Ремонт, Поставщик, Медиа)
+        allowed_groups = ['Дизайн', 'Ремонт', 'Поставщик', 'Медиа']
+        all_users = User.objects.filter(groups__name__in=allowed_groups).prefetch_related('groups').distinct()
         current_totals = {
             'total': all_users.count(),
             'supplier': all_users.filter(groups__name='Поставщик').distinct().count(),

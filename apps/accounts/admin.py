@@ -8,13 +8,21 @@ class UserAdmin(BaseUserAdmin):
     list_display = [
         'phone',
         'full_name',
-        'role',
+        'get_groups_display',
         'is_phone_verified',
         'is_profile_completed',
         'is_active_profile',
         'is_active',
         'created_at',
     ]
+    
+    def get_groups_display(self, obj):
+        """Groups name'larini ko'rsatish"""
+        groups = obj.groups.all()
+        if groups.exists():
+            return ', '.join([group.name for group in groups])
+        return '-'
+    get_groups_display.short_description = 'Группы'
     list_filter = [
         'role',
         'is_phone_verified',
