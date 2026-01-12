@@ -885,21 +885,31 @@ class ReportsAnalyticsView(views.APIView):
             'media': period_users.filter(groups__name='Медиа').distinct().count(),
         }
         
-        # 2. График по месяцам (monthly_trends) - последние 12 месяцев - groups bo'yicha
-        # Вычисляем дату начала (12 месяцев назад)
-        twelve_months_ago = timezone.now() - timedelta(days=365)
-        
-        # Получаем данные по месяцам
-        monthly_data = User.objects.filter(
-            created_at__gte=twelve_months_ago
-        ).prefetch_related('groups').annotate(
-            month=TruncMonth('created_at')
-        ).values('month', 'id').order_by('month')
+        # 2. График по месяцам (monthly_trends) - groups bo'yicha
+        # Agar start_date va end_date berilsa, faqat shu period uchun
+        # Agar berilmasa, oxirgi 12 oy uchun
+        if start_date_str and end_date_str:
+            # Faqat berilgan period uchun
+            monthly_data = User.objects.filter(
+                created_at__gte=start_datetime,
+                created_at__lte=end_datetime
+            ).prefetch_related('groups').annotate(
+                month=TruncMonth('created_at')
+            ).values('month', 'id').order_by('month')
+        else:
+            # Oxirgi 12 oy uchun
+            twelve_months_ago = timezone.now() - timedelta(days=365)
+            monthly_data = User.objects.filter(
+                created_at__gte=twelve_months_ago
+            ).prefetch_related('groups').annotate(
+                month=TruncMonth('created_at')
+            ).values('month', 'id').order_by('month')
         
         # Формируем структуру для графика
         monthly_dict = {}
         for user_data in monthly_data:
-            month_str = user_data['month'].strftime('%Y-%m')
+            # YYYY-MM-DD formatida (oyning birinchi kuni)
+            month_str = user_data['month'].strftime('%Y-%m-01')
             if month_str not in monthly_dict:
                 monthly_dict[month_str] = {
                     'month': month_str,
