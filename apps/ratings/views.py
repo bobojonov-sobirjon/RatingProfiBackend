@@ -56,7 +56,7 @@ class QuestionnaireRatingCreateView(views.APIView):
         return model_map.get(role)
     
     def post(self, request):
-        serializer = QuestionnaireRatingCreateSerializer(data=request.data)
+        serializer = QuestionnaireRatingCreateSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
@@ -97,7 +97,7 @@ class QuestionnaireRatingCreateView(views.APIView):
             rating.status = 'pending'  # Yangilangan rating yana moderatsiyaga
             rating.save()
         
-        result_serializer = QuestionnaireRatingSerializer(rating)
+        result_serializer = QuestionnaireRatingSerializer(rating, context={'request': request})
         return Response(result_serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
@@ -366,14 +366,14 @@ class QuestionnaireRatingDetailView(views.APIView):
     def get(self, request, pk):
         """GET: Rating'ni olish"""
         rating = self.get_object(pk)
-        serializer = QuestionnaireRatingSerializer(rating)
+        serializer = QuestionnaireRatingSerializer(rating, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     def put(self, request, pk):
         """PUT: Rating'ni to'liq yangilash"""
         rating = self.get_object(pk)
         
-        serializer = QuestionnaireRatingCreateSerializer(data=request.data)
+        serializer = QuestionnaireRatingCreateSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
@@ -396,7 +396,7 @@ class QuestionnaireRatingDetailView(views.APIView):
         rating.status = 'pending'  # Yangilangan rating yana moderatsiyaga
         rating.save()
         
-        result_serializer = QuestionnaireRatingSerializer(rating)
+        result_serializer = QuestionnaireRatingSerializer(rating, context={'request': request})
         return Response(result_serializer.data, status=status.HTTP_200_OK)
     
     def patch(self, request, pk):
@@ -414,7 +414,7 @@ class QuestionnaireRatingDetailView(views.APIView):
         rating.status = 'pending'  # Yangilangan rating yana moderatsiyaga
         rating.save()
         
-        result_serializer = QuestionnaireRatingSerializer(rating)
+        result_serializer = QuestionnaireRatingSerializer(rating, context={'request': request})
         return Response(result_serializer.data, status=status.HTTP_200_OK)
     
     def delete(self, request, pk):
@@ -472,13 +472,13 @@ class QuestionnaireRatingStatusUpdateView(views.APIView):
             raise PermissionDenied("Только администратор может изменять статус рейтинга")
         
         rating = self.get_object(pk)
-        serializer = QuestionnaireRatingStatusUpdateSerializer(data=request.data)
+        serializer = QuestionnaireRatingStatusUpdateSerializer(data=request.data, context={'request': request})
         
         if serializer.is_valid():
             rating.status = serializer.validated_data['status']
             rating.save()
             
-            result_serializer = QuestionnaireRatingSerializer(rating)
+            result_serializer = QuestionnaireRatingSerializer(rating, context={'request': request})
             return Response(result_serializer.data, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

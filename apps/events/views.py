@@ -291,10 +291,10 @@ class UpcomingEventListView(views.APIView):
         page = paginator.paginate_queryset(queryset, request)
         
         if page is not None:
-            serializer = UpcomingEventSerializer(page, many=True)
+            serializer = UpcomingEventSerializer(page, many=True, context={'request': request})
             return paginator.get_paginated_response(serializer.data)
         
-        serializer = UpcomingEventSerializer(queryset, many=True)
+        serializer = UpcomingEventSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @extend_schema(
@@ -312,7 +312,7 @@ class UpcomingEventListView(views.APIView):
     )
     def post(self, request):
         """POST: Создать мероприятие"""
-        serializer = UpcomingEventSerializer(data=request.data)
+        serializer = UpcomingEventSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(created_by=request.user if request.user.is_authenticated else None)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -367,7 +367,7 @@ class UpcomingEventDetailView(views.APIView):
     def get(self, request, pk):
         """GET: Получить мероприятие"""
         event = self.get_object(pk)
-        serializer = UpcomingEventSerializer(event)
+        serializer = UpcomingEventSerializer(event, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @extend_schema(
@@ -387,7 +387,7 @@ class UpcomingEventDetailView(views.APIView):
         if not request.user.is_authenticated or (event.created_by != request.user and not request.user.is_staff):
             raise PermissionDenied('Вы не можете обновить это мероприятие')
         
-        serializer = UpcomingEventSerializer(event, data=request.data)
+        serializer = UpcomingEventSerializer(event, data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -410,7 +410,7 @@ class UpcomingEventDetailView(views.APIView):
         if not request.user.is_authenticated or (event.created_by != request.user and not request.user.is_staff):
             raise PermissionDenied('Вы не можете обновить это мероприятие')
         
-        serializer = UpcomingEventSerializer(event, data=request.data, partial=True)
+        serializer = UpcomingEventSerializer(event, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -468,34 +468,20 @@ class RatingPageView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
-        import time
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        start_time = time.time()
-        logger.info(f"[RATINGS API] Starting request at {time.time()}")
-        
         from apps.ratings.models import QuestionnaireRating
         from apps.accounts.models import DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire, MediaQuestionnaire
         from django.db.models import Count, Q
-        from django.db import connection
         
         # Фильтры
         group_filter = request.query_params.get('group')
         search = request.query_params.get('search')
         ordering = request.query_params.get('ordering', '-total_rating_count')
         
-        initial_queries = len(connection.queries)
-        logger.info(f"[RATINGS API] Initial queries: {initial_queries}")
-        
         # Barcha approved rating'larni bir marta olish va cache qilish
-        logger.info(f"[RATINGS API] Fetching all ratings...")
         all_ratings = QuestionnaireRating.objects.filter(status='approved').select_related('reviewer')
         ratings_list = list(all_ratings)
-        logger.info(f"[RATINGS API] Fetched {len(ratings_list)} ratings. Queries: {len(connection.queries) - initial_queries}")
         
         # Rating'larni role va questionnaire_id bo'yicha guruhlash
-        logger.info(f"[RATINGS API] Building ratings cache...")
         ratings_cache = {}
         ratings_list_cache = {}  # rating_list va reviews_list uchun
         for rating in ratings_list:
@@ -513,12 +499,9 @@ class RatingPageView(views.APIView):
             # Rating list uchun
             ratings_list_cache[key].append(rating)
         
-        logger.info(f"[RATINGS API] Cache built. Keys: {len(ratings_cache)}. Queries: {len(connection.queries) - initial_queries}")
-        
         result = []
         
         # DesignerQuestionnaire
-        logger.info(f"[RATINGS API] Fetching designers...")
         designers = DesignerQuestionnaire.objects.filter(status='published', is_moderation=True)
         if group_filter and group_filter != 'Дизайн':
             designers = designers.none()
@@ -529,11 +512,8 @@ class RatingPageView(views.APIView):
             )
         
         designers_list = list(designers)
-        logger.info(f"[RATINGS API] Found {len(designers_list)} designers. Queries: {len(connection.queries) - initial_queries}")
         
-        for idx, designer in enumerate(designers_list):
-            if idx % 10 == 0:
-                logger.info(f"[RATINGS API] Processing designer {idx+1}/{len(designers_list)}. Queries: {len(connection.queries) - initial_queries}")
+        for designer in designers_list:
             key = f"Дизайн_{designer.id}"
             rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
             
@@ -548,10 +528,7 @@ class RatingPageView(views.APIView):
                 'constructive_rating_count': rating_stats['total_constructive'],
             })
         
-        logger.info(f"[RATINGS API] Designers processed. Queries: {len(connection.queries) - initial_queries}")
-        
         # RepairQuestionnaire
-        logger.info(f"[RATINGS API] Fetching repairs...")
         repairs = RepairQuestionnaire.objects.filter(status='published', is_moderation=True)
         if group_filter and group_filter != 'Ремонт':
             repairs = repairs.none()
@@ -562,11 +539,8 @@ class RatingPageView(views.APIView):
             )
         
         repairs_list = list(repairs)
-        logger.info(f"[RATINGS API] Found {len(repairs_list)} repairs. Queries: {len(connection.queries) - initial_queries}")
         
-        for idx, repair in enumerate(repairs_list):
-            if idx % 10 == 0:
-                logger.info(f"[RATINGS API] Processing repair {idx+1}/{len(repairs_list)}. Queries: {len(connection.queries) - initial_queries}")
+        for repair in repairs_list:
             key = f"Ремонт_{repair.id}"
             rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
             
@@ -581,10 +555,7 @@ class RatingPageView(views.APIView):
                 'constructive_rating_count': rating_stats['total_constructive'],
             })
         
-        logger.info(f"[RATINGS API] Repairs processed. Queries: {len(connection.queries) - initial_queries}")
-        
         # SupplierQuestionnaire
-        logger.info(f"[RATINGS API] Fetching suppliers...")
         suppliers = SupplierQuestionnaire.objects.filter(status='published', is_moderation=True)
         if group_filter and group_filter != 'Поставщик':
             suppliers = suppliers.none()
@@ -595,11 +566,8 @@ class RatingPageView(views.APIView):
             )
         
         suppliers_list = list(suppliers)
-        logger.info(f"[RATINGS API] Found {len(suppliers_list)} suppliers. Queries: {len(connection.queries) - initial_queries}")
         
-        for idx, supplier in enumerate(suppliers_list):
-            if idx % 10 == 0:
-                logger.info(f"[RATINGS API] Processing supplier {idx+1}/{len(suppliers_list)}. Queries: {len(connection.queries) - initial_queries}")
+        for supplier in suppliers_list:
             key = f"Поставщик_{supplier.id}"
             rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
             
@@ -614,10 +582,7 @@ class RatingPageView(views.APIView):
                 'constructive_rating_count': rating_stats['total_constructive'],
             })
         
-        logger.info(f"[RATINGS API] Suppliers processed. Queries: {len(connection.queries) - initial_queries}")
-        
         # MediaQuestionnaire
-        logger.info(f"[RATINGS API] Fetching media...")
         media = MediaQuestionnaire.objects.filter(status='published', is_moderation=True)
         if group_filter and group_filter != 'Медиа':
             media = media.none()
@@ -628,11 +593,8 @@ class RatingPageView(views.APIView):
             )
         
         media_list = list(media)
-        logger.info(f"[RATINGS API] Found {len(media_list)} media. Queries: {len(connection.queries) - initial_queries}")
         
-        for idx, media_item in enumerate(media_list):
-            if idx % 10 == 0:
-                logger.info(f"[RATINGS API] Processing media {idx+1}/{len(media_list)}. Queries: {len(connection.queries) - initial_queries}")
+        for media_item in media_list:
             key = f"Медиа_{media_item.id}"
             rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
             
@@ -646,8 +608,6 @@ class RatingPageView(views.APIView):
                 'positive_rating_count': rating_stats['total_positive'],
                 'constructive_rating_count': rating_stats['total_constructive'],
             })
-        
-        logger.info(f"[RATINGS API] Media processed. Queries: {len(connection.queries) - initial_queries}")
         
         # Сортировка
         reverse_order = ordering.startswith('-')
@@ -663,15 +623,10 @@ class RatingPageView(views.APIView):
             result.sort(key=lambda x: x.get('total_rating_count', 0), reverse=True)
         
         # Pagination
-        logger.info(f"[RATINGS API] Total results before pagination: {len(result)}. Queries: {len(connection.queries) - initial_queries}")
         paginator = LimitOffsetPagination()
         paginator.default_limit = 20
         paginator.max_limit = 100
         page = paginator.paginate_queryset(result, request)
-        
-        elapsed_time = time.time() - start_time
-        total_queries = len(connection.queries) - initial_queries
-        logger.info(f"[RATINGS API] Completed in {elapsed_time:.2f} seconds. Total queries: {total_queries}")
         
         if page is not None:
             return paginator.get_paginated_response(page)
@@ -762,10 +717,10 @@ class ReviewsPageView(views.APIView):
         page = paginator.paginate_queryset(queryset, request)
         
         if page is not None:
-            serializer = QuestionnaireRatingSerializer(page, many=True)
+            serializer = QuestionnaireRatingSerializer(page, many=True, context={'request': request})
             return paginator.get_paginated_response(serializer.data)
         
-        serializer = QuestionnaireRatingSerializer(queryset, many=True)
+        serializer = QuestionnaireRatingSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

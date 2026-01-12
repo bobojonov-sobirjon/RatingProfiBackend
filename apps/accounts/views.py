@@ -1533,7 +1533,7 @@ class DesignerQuestionnaireListView(views.APIView):
         paginator.offset_query_param = 'offset'
         
         paginated_questionnaires = paginator.paginate_queryset(questionnaires, request)
-        serializer = DesignerQuestionnaireSerializer(paginated_questionnaires, many=True)
+        serializer = DesignerQuestionnaireSerializer(paginated_questionnaires, many=True, context={'request': request})
         
         return paginator.get_paginated_response(serializer.data)
     
@@ -1826,7 +1826,7 @@ class DesignerQuestionnaireDetailView(views.APIView):
     
     def get(self, request, pk):
         questionnaire = self.get_object(pk, request)
-        serializer = DesignerQuestionnaireSerializer(questionnaire)
+        serializer = DesignerQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     def put(self, request, pk):
@@ -2206,7 +2206,7 @@ class RepairQuestionnaireListView(views.APIView):
         paginator.offset_query_param = 'offset'
         
         paginated_questionnaires = paginator.paginate_queryset(questionnaires, request)
-        serializer = RepairQuestionnaireSerializer(paginated_questionnaires, many=True)
+        serializer = RepairQuestionnaireSerializer(paginated_questionnaires, many=True, context={'request': request})
         
         return paginator.get_paginated_response(serializer.data)
     
@@ -2313,7 +2313,7 @@ class RepairQuestionnaireDetailView(views.APIView):
     
     def get(self, request, pk):
         questionnaire = self.get_object(pk)
-        serializer = RepairQuestionnaireSerializer(questionnaire)
+        serializer = RepairQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     def put(self, request, pk):
@@ -2385,7 +2385,7 @@ class DesignerQuestionnaireStatusUpdateView(views.APIView):
             questionnaire.status = serializer.validated_data['status']
             questionnaire.save()
             
-            result_serializer = DesignerQuestionnaireSerializer(questionnaire)
+            result_serializer = DesignerQuestionnaireSerializer(questionnaire, context={'request': request})
             return Response(result_serializer.data, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -2652,7 +2652,7 @@ class RepairQuestionnaireStatusUpdateView(views.APIView):
             questionnaire.status = serializer.validated_data['status']
             questionnaire.save()
             
-            result_serializer = RepairQuestionnaireSerializer(questionnaire)
+            result_serializer = RepairQuestionnaireSerializer(questionnaire, context={'request': request})
             return Response(result_serializer.data, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -2997,7 +2997,7 @@ class SupplierQuestionnaireListView(views.APIView):
         paginator.offset_query_param = 'offset'
         
         paginated_questionnaires = paginator.paginate_queryset(questionnaires, request)
-        serializer = SupplierQuestionnaireSerializer(paginated_questionnaires, many=True)
+        serializer = SupplierQuestionnaireSerializer(paginated_questionnaires, many=True, context={'request': request})
         
         return paginator.get_paginated_response(serializer.data)
     
@@ -3102,7 +3102,7 @@ class SupplierQuestionnaireDetailView(views.APIView):
     
     def get(self, request, pk):
         questionnaire = self.get_object(pk, request)
-        serializer = SupplierQuestionnaireSerializer(questionnaire)
+        serializer = SupplierQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     def put(self, request, pk):
@@ -3382,7 +3382,7 @@ class SupplierQuestionnaireStatusUpdateView(views.APIView):
             questionnaire.status = serializer.validated_data['status']
             questionnaire.save()
             
-            result_serializer = SupplierQuestionnaireSerializer(questionnaire)
+            result_serializer = SupplierQuestionnaireSerializer(questionnaire, context={'request': request})
             return Response(result_serializer.data, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -3466,7 +3466,7 @@ class MediaQuestionnaireListView(views.APIView):
         paginator.offset_query_param = 'offset'
         
         paginated_questionnaires = paginator.paginate_queryset(questionnaires, request)
-        serializer = MediaQuestionnaireSerializer(paginated_questionnaires, many=True)
+        serializer = MediaQuestionnaireSerializer(paginated_questionnaires, many=True, context={'request': request})
         
         return paginator.get_paginated_response(serializer.data)
     
@@ -3559,7 +3559,7 @@ class MediaQuestionnaireDetailView(views.APIView):
     
     def get(self, request, pk):
         questionnaire = self.get_object(pk, request)
-        serializer = MediaQuestionnaireSerializer(questionnaire)
+        serializer = MediaQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     def put(self, request, pk):
@@ -3631,7 +3631,7 @@ class MediaQuestionnaireStatusUpdateView(views.APIView):
             questionnaire.status = serializer.validated_data['status']
             questionnaire.save()
             
-            result_serializer = MediaQuestionnaireSerializer(questionnaire)
+            result_serializer = MediaQuestionnaireSerializer(questionnaire, context={'request': request})
             return Response(result_serializer.data, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -3755,7 +3755,7 @@ class DesignerQuestionnaireModerationView(views.APIView):
         questionnaire.is_moderation = True
         questionnaire.save()
         
-        result_serializer = DesignerQuestionnaireSerializer(questionnaire)
+        result_serializer = DesignerQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(result_serializer.data, status=status.HTTP_200_OK)
 
 
@@ -3864,7 +3864,7 @@ class RepairQuestionnaireModerationView(views.APIView):
         questionnaire.is_moderation = True
         questionnaire.save()
         
-        result_serializer = RepairQuestionnaireSerializer(questionnaire)
+        result_serializer = RepairQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(result_serializer.data, status=status.HTTP_200_OK)
 
 
@@ -3973,7 +3973,7 @@ class SupplierQuestionnaireModerationView(views.APIView):
         questionnaire.is_moderation = True
         questionnaire.save()
         
-        result_serializer = SupplierQuestionnaireSerializer(questionnaire)
+        result_serializer = SupplierQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(result_serializer.data, status=status.HTTP_200_OK)
 
 
@@ -4082,5 +4082,5 @@ class MediaQuestionnaireModerationView(views.APIView):
         questionnaire.is_moderation = True
         questionnaire.save()
         
-        result_serializer = MediaQuestionnaireSerializer(questionnaire)
+        result_serializer = MediaQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(result_serializer.data, status=status.HTTP_200_OK)
