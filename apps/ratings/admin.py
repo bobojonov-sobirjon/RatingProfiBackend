@@ -5,7 +5,6 @@ from .models import QuestionnaireRating
 @admin.register(QuestionnaireRating)
 class QuestionnaireRatingAdmin(admin.ModelAdmin):
     list_display = [
-        'id',
         'reviewer',
         'role',
         'questionnaire_id',

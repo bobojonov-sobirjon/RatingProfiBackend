@@ -1634,13 +1634,8 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
         ]
         
         # Уникальные города - Выберете город
-        # Faqat a'zolar tomonidan e'lon qilingan shaharlar + maxsus variantlar
-        # Staff userlar uchun barcha, oddiy userlar uchun faqat is_moderation=True
-        is_staff = request.user.is_authenticated and request.user.is_staff
-        if is_staff:
-            cities_query = DesignerQuestionnaire.objects.filter(is_deleted=False)
-        else:
-            cities_query = DesignerQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
+        # Barcha shaharlar (is_deleted=False faqat)
+        cities_query = DesignerQuestionnaire.objects.filter(is_deleted=False)
         
         # Group filter bo'lsa, faqat o'sha kategoriyadagi shaharlarni ko'rsatish
         group = request.query_params.get('group')
@@ -1676,7 +1671,7 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
         # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
         # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
         segments = [
-            {'value': choice[0], 'label': choice[1]} 
+            {'value': choice[0], 'label': choice[1].capitalize()} 
             for choice in DesignerQuestionnaire.SEGMENT_CHOICES
         ]
         
@@ -1690,29 +1685,29 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
         
         # Площадь объекта - Площадь объекта (ko'p tanlash mumkin)
         object_areas = [
-            {'value': 'up_to_10m2', 'label': 'до 10 м²'},
-            {'value': 'up_to_40m2', 'label': 'до 40 м²'},
-            {'value': 'up_to_80m2', 'label': 'до 80 м²'},
-            {'value': 'houses', 'label': 'дома'},
-            {'value': 'not_important', 'label': 'не важно'},
+            {'value': 'up_to_10m2', 'label': 'До 10 м²'},
+            {'value': 'up_to_40m2', 'label': 'До 40 м²'},
+            {'value': 'up_to_80m2', 'label': 'До 80 м²'},
+            {'value': 'houses', 'label': 'Дома'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
         # Стоимость за м2 - Стоимость за м2
         cost_per_sqm_options = [
             {'value': 'up_to_1500', 'label': 'До 1500 р'},
-            {'value': 'up_to_2500', 'label': 'до 2500 р'},
-            {'value': 'up_to_4000', 'label': 'до 4000 р'},
-            {'value': 'over_4000', 'label': 'свыше 4000 р'},
-            {'value': 'not_important', 'label': 'не важно'},
+            {'value': 'up_to_2500', 'label': 'До 2500 р'},
+            {'value': 'up_to_4000', 'label': 'До 4000 р'},
+            {'value': 'over_4000', 'label': 'Свыше 4000 р'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
         # Опыт работы - Опыт работы
         experience_options = [
             {'value': 'beginner', 'label': 'Новичок'},
-            {'value': 'up_to_2_years', 'label': 'до 2 лет'},
+            {'value': 'up_to_2_years', 'label': 'До 2 лет'},
             {'value': '2_5_years', 'label': '2-5 лет'},
             {'value': '5_10_years', 'label': '5-10 лет'},
-            {'value': 'over_10_years', 'label': 'свыше 10 лет'},
+            {'value': 'over_10_years', 'label': 'Свыше 10 лет'},
         ]
         
         return Response({
@@ -2486,8 +2481,8 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
         # Yangi kategoriyalar: ПОД КЛЮЧ, черновые работы, чистовые работы, Сантехника и плитка, Пол, Стены, Комнаты под ключ, Электрика, ВСЕ
         categories = [
             {'value': 'turnkey', 'label': 'ПОД КЛЮЧ'},
-            {'value': 'rough_works', 'label': 'черновые работы'},
-            {'value': 'finishing_works', 'label': 'чистовые работы'},
+            {'value': 'rough_works', 'label': 'Черновые работы'},
+            {'value': 'finishing_works', 'label': 'Чистовые работы'},
             {'value': 'plumbing_tiles', 'label': 'Сантехника и плитка'},
             {'value': 'floor', 'label': 'Пол'},
             {'value': 'walls', 'label': 'Стены'},
@@ -2497,14 +2492,9 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
         ]
         
         # Уникальные города из representative_cities - Выберете город
-        # Faqat tanlangan kategoriyadagi a'zolar tomonidan e'lon qilingan shaharlar
+        # Barcha shaharlar (is_deleted=False faqat)
         all_cities = set()
-        # Staff userlar uchun barcha, oddiy userlar uchun faqat is_moderation=True
-        is_staff = request.user.is_authenticated and request.user.is_staff
-        if is_staff:
-            repair_query = RepairQuestionnaire.objects.filter(is_deleted=False)
-        else:
-            repair_query = RepairQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
+        repair_query = RepairQuestionnaire.objects.filter(is_deleted=False)
         
         # Group filter bo'lsa, faqat o'sha kategoriyadagi shaharlarni ko'rsatish
         group = request.query_params.get('group')
@@ -2550,7 +2540,7 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
         # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
         # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
         segments = [
-            {'value': choice[0], 'label': choice[1]} 
+            {'value': choice[0], 'label': choice[1].capitalize()} 
             for choice in RepairQuestionnaire.SEGMENT_CHOICES
         ]
         
@@ -2559,34 +2549,34 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
         vat_payments = [
             {'value': 'yes', 'label': 'Да'},
             {'value': 'no', 'label': 'Нет'},
-            {'value': 'not_important', 'label': 'не важно'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
         # Карточки журналов - Карточки журналов (ko'p tanlash mumkin)
         magazine_cards = [
-            {'value': 'hi_home', 'label': 'hi home'},
-            {'value': 'in_home', 'label': 'in home'},
-            {'value': 'no', 'label': 'нет'},
-            {'value': 'not_important', 'label': 'не важно'},
+            {'value': 'hi_home', 'label': 'Hi Home'},
+            {'value': 'in_home', 'label': 'In Home'},
+            {'value': 'no', 'label': 'Нет'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
         # Скорость исполнения - Скорость исполнения
         execution_speeds = [
             {'value': 'advance_booking', 'label': 'Предварительная запись'},
-            {'value': 'quick_start', 'label': 'быстрый старт'},
-            {'value': 'not_important', 'label': 'не важно'},
+            {'value': 'quick_start', 'label': 'Быстрый старт'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
         # Условия сотрудничества - Условия сотрудничества
         cooperation_terms_options = [
             {'value': 'up_to_5_percent', 'label': 'До 5%'},
             {'value': 'up_to_10_percent', 'label': 'До 10%'},
-            {'value': 'not_important', 'label': 'не важно'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
         # Формы бизнеса
         business_forms = [
-            {'value': choice[0], 'label': choice[1]} 
+            {'value': choice[0], 'label': choice[1].capitalize()} 
             for choice in RepairQuestionnaire.BUSINESS_FORM_CHOICES
         ]
         
@@ -3213,13 +3203,9 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
         ]
         
         # Уникальные города из representative_cities - Выберете город
-        # Faqat tanlangan kategoriyadagi a'zolar tomonidan e'lon qilingan shaharlar
-        # Staff userlar uchun barcha (is_deleted=False), oddiy userlar uchun faqat is_moderation=True
+        # Barcha shaharlar (is_deleted=False faqat)
         is_staff = request.user.is_authenticated and request.user.is_staff
-        if is_staff:
-            supplier_query = SupplierQuestionnaire.objects.filter(is_deleted=False)
-        else:
-            supplier_query = SupplierQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
+        supplier_query = SupplierQuestionnaire.objects.filter(is_deleted=False)
         
         # Group filter bo'lsa, faqat o'sha kategoriyadagi shaharlarni ko'rsatish
         group = request.query_params.get('group')
@@ -3262,7 +3248,7 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
         # Сегменты - Выберите сегмент (ko'p tanlash mumkin)
         # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
         segments = [
-            {'value': choice[0], 'label': choice[1]} 
+            {'value': choice[0], 'label': choice[1].capitalize()} 
             for choice in SupplierQuestionnaire.SEGMENT_CHOICES
         ]
         
@@ -3275,18 +3261,15 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
         
         # Карточки журналов - Карточки журналов (ko'p tanlash mumkin) + mediaspace variantlari
         magazine_cards = [
-            {'value': 'hi_home', 'label': 'hi home'},
-            {'value': 'in_home', 'label': 'in home'},
-            {'value': 'no', 'label': 'нет'},
-            {'value': 'not_important', 'label': 'не важно'},
+            {'value': 'hi_home', 'label': 'Hi Home'},
+            {'value': 'in_home', 'label': 'In Home'},
+            {'value': 'no', 'label': 'Нет'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
         # Mediaspace guruhidan variantlar qo'shamiz
         # MediaQuestionnaire modelidan brand_name larni olamiz
-        if is_staff:
-            media_query = MediaQuestionnaire.objects.filter(is_deleted=False, is_moderation=True)
-        else:
-            media_query = MediaQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
+        media_query = MediaQuestionnaire.objects.filter(is_deleted=False)
         
         # MediaQuestionnaire modelida brand_name bor
         for media in media_query:
@@ -3295,28 +3278,28 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
                 media_value = media.brand_name.lower().replace(' ', '_').replace('-', '_')
                 # Agar allaqachon qo'shilgan bo'lsa, qo'shmaslik
                 if not any(card['value'] == media_value for card in magazine_cards):
-                    magazine_cards.append({'value': media_value, 'label': media.brand_name})
+                    magazine_cards.append({'value': media_value, 'label': media.brand_name.capitalize()})
         
         # Скорость исполнения - Скорость исполнения (ko'p tanlash mumkin)
         execution_speeds = [
             {'value': 'in_stock', 'label': 'В наличии'},
-            {'value': 'up_to_2_weeks', 'label': 'до 2х недель'},
-            {'value': 'up_to_1_month', 'label': 'до 1 месяца'},
-            {'value': 'up_to_3_months', 'label': 'до 3х месяцев'},
-            {'value': 'not_important', 'label': 'не важно'},
+            {'value': 'up_to_2_weeks', 'label': 'До 2х недель'},
+            {'value': 'up_to_1_month', 'label': 'До 1 месяца'},
+            {'value': 'up_to_3_months', 'label': 'До 3х месяцев'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
         # Условия сотрудничества - Условия сотрудничества
         cooperation_terms_options = [
-            {'value': 'up_to_10_percent', 'label': 'до 10%'},
-            {'value': 'up_to_20_percent', 'label': 'до 20%'},
-            {'value': 'up_to_30_percent', 'label': 'до 30%'},
-            {'value': 'not_important', 'label': 'не важно'},
+            {'value': 'up_to_10_percent', 'label': 'До 10%'},
+            {'value': 'up_to_20_percent', 'label': 'До 20%'},
+            {'value': 'up_to_30_percent', 'label': 'До 30%'},
+            {'value': 'not_important', 'label': 'Не важно'},
         ]
         
         # Формы бизнеса
         business_forms = [
-            {'value': choice[0], 'label': choice[1]} 
+            {'value': choice[0], 'label': choice[1].capitalize()} 
             for choice in SupplierQuestionnaire.BUSINESS_FORM_CHOICES
         ]
         

@@ -5,7 +5,6 @@ from .models import UpcomingEvent
 @admin.register(UpcomingEvent)
 class UpcomingEventAdmin(admin.ModelAdmin):
     list_display = [
-        'id',
         'organization_name',
         'event_type',
         'city',
