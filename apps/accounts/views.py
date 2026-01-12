@@ -748,22 +748,20 @@ class UserListView(views.APIView):
         
         # Faqat Дизайн, Медиа, Поставщик, Ремонт role'lardagi userlar
         allowed_roles = ['Дизайн', 'Ремонт', 'Поставщик', 'Медиа']
-        queryset = User.objects.filter(groups__name__in=allowed_roles)
+        queryset = User.objects.filter(groups__name__in=allowed_roles).distinct()
         
-        # По умолчанию только активные профили
+        # Фильтр по is_active_profile (если указан)
         is_active_profile = self.request.query_params.get('is_active_profile')
-        if is_active_profile is None:
-            # По умолчанию только активные
-            queryset = queryset.filter(is_active_profile=True)
-        elif is_active_profile.lower() == 'true':
-            queryset = queryset.filter(is_active_profile=True)
-        elif is_active_profile.lower() == 'false':
-            queryset = queryset.filter(is_active_profile=False)
+        if is_active_profile is not None:
+            if is_active_profile.lower() == 'true':
+                queryset = queryset.filter(is_active_profile=True)
+            elif is_active_profile.lower() == 'false':
+                queryset = queryset.filter(is_active_profile=False)
         
         # Фильтры
         role = self.request.query_params.get('role')
         if role and role in allowed_roles:
-            queryset = queryset.filter(role=role)
+            queryset = queryset.filter(groups__name=role).distinct()
         
         city = self.request.query_params.get('city')
         if city:
