@@ -871,37 +871,35 @@ class ReportsAnalyticsView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 1. Статистика за выбранный период (period_stats)
+        # 1. Статистика за выбранный период (period_stats) - groups bo'yicha
         period_users = User.objects.filter(
             created_at__gte=start_datetime,
             created_at__lte=end_datetime
-        )
+        ).prefetch_related('groups')
         
         period_stats = {
             'total': period_users.count(),
-            'supplier': period_users.filter(role='supplier').count(),
-            'repair': period_users.filter(role='repair').count(),
-            'design': period_users.filter(role='designer').count(),
-            'media': period_users.filter(role='media').count(),
+            'supplier': period_users.filter(groups__name='Поставщик').distinct().count(),
+            'repair': period_users.filter(groups__name='Ремонт').distinct().count(),
+            'design': period_users.filter(groups__name='Дизайн').distinct().count(),
+            'media': period_users.filter(groups__name='Медиа').distinct().count(),
         }
         
-        # 2. График по месяцам (monthly_trends) - последние 12 месяцев
+        # 2. График по месяцам (monthly_trends) - последние 12 месяцев - groups bo'yicha
         # Вычисляем дату начала (12 месяцев назад)
         twelve_months_ago = timezone.now() - timedelta(days=365)
         
-        # Получаем данные по месяцам для каждой роли
+        # Получаем данные по месяцам
         monthly_data = User.objects.filter(
             created_at__gte=twelve_months_ago
-        ).annotate(
+        ).prefetch_related('groups').annotate(
             month=TruncMonth('created_at')
-        ).values('month', 'role').annotate(
-            count=Count('id')
-        ).order_by('month')
+        ).values('month', 'id').order_by('month')
         
         # Формируем структуру для графика
         monthly_dict = {}
-        for item in monthly_data:
-            month_str = item['month'].strftime('%Y-%m')
+        for user_data in monthly_data:
+            month_str = user_data['month'].strftime('%Y-%m')
             if month_str not in monthly_dict:
                 monthly_dict[month_str] = {
                     'month': month_str,
@@ -912,17 +910,18 @@ class ReportsAnalyticsView(views.APIView):
                     'total': 0
                 }
             
-            role = item['role']
-            count = item['count']
+            # User'ning groups'larini olish
+            user = User.objects.get(id=user_data['id'])
+            user_groups = user.groups.values_list('name', flat=True)
             
-            if role == 'supplier':
-                monthly_dict[month_str]['supplier'] = count
-            elif role == 'repair':
-                monthly_dict[month_str]['repair'] = count
-            elif role == 'designer':
-                monthly_dict[month_str]['design'] = count
-            elif role == 'media':
-                monthly_dict[month_str]['media'] = count
+            if 'Поставщик' in user_groups:
+                monthly_dict[month_str]['supplier'] += 1
+            if 'Ремонт' in user_groups:
+                monthly_dict[month_str]['repair'] += 1
+            if 'Дизайн' in user_groups:
+                monthly_dict[month_str]['design'] += 1
+            if 'Медиа' in user_groups:
+                monthly_dict[month_str]['media'] += 1
         
         # Вычисляем total для каждого месяца
         for month_str in monthly_dict:
@@ -936,17 +935,69 @@ class ReportsAnalyticsView(views.APIView):
         # Преобразуем в список и сортируем
         monthly_trends = sorted(monthly_dict.values(), key=lambda x: x['month'])
         
-        # 3. Текущие общие показатели (current_totals) - всегда актуальные данные
-        all_users = User.objects.all()
+        # 2.1. График по дням (daily_trends) - agar start_date va end_date berilsa
+        daily_trends = []
+        if start_date_str and end_date_str:
+            from django.db.models.functions import TruncDate
+            
+            # Har bir kun uchun ma'lumot olish
+            daily_data = User.objects.filter(
+                created_at__gte=start_datetime,
+                created_at__lte=end_datetime
+            ).prefetch_related('groups').annotate(
+                day=TruncDate('created_at')
+            ).values('day', 'id').order_by('day')
+            
+            # Формируем структуру для графика по дням
+            daily_dict = {}
+            for user_data in daily_data:
+                day_str = user_data['day'].strftime('%Y-%m-%d')
+                if day_str not in daily_dict:
+                    daily_dict[day_str] = {
+                        'date': day_str,
+                        'supplier': 0,
+                        'repair': 0,
+                        'design': 0,
+                        'media': 0,
+                        'total': 0
+                    }
+                
+                # User'ning groups'larini olish
+                user = User.objects.get(id=user_data['id'])
+                user_groups = user.groups.values_list('name', flat=True)
+                
+                if 'Поставщик' in user_groups:
+                    daily_dict[day_str]['supplier'] += 1
+                if 'Ремонт' in user_groups:
+                    daily_dict[day_str]['repair'] += 1
+                if 'Дизайн' in user_groups:
+                    daily_dict[day_str]['design'] += 1
+                if 'Медиа' in user_groups:
+                    daily_dict[day_str]['media'] += 1
+            
+            # Вычисляем total для каждого дня
+            for day_str in daily_dict:
+                daily_dict[day_str]['total'] = (
+                    daily_dict[day_str]['supplier'] +
+                    daily_dict[day_str]['repair'] +
+                    daily_dict[day_str]['design'] +
+                    daily_dict[day_str]['media']
+                )
+            
+            # Преобразуем в список и сортируем
+            daily_trends = sorted(daily_dict.values(), key=lambda x: x['date'])
+        
+        # 3. Текущие общие показатели (current_totals) - всегда актуальные данные - groups bo'yicha
+        all_users = User.objects.all().prefetch_related('groups')
         current_totals = {
             'total': all_users.count(),
-            'supplier': all_users.filter(role='supplier').count(),
-            'repair': all_users.filter(role='repair').count(),
-            'design': all_users.filter(role='designer').count(),
-            'media': all_users.filter(role='media').count(),
+            'supplier': all_users.filter(groups__name='Поставщик').distinct().count(),
+            'repair': all_users.filter(groups__name='Ремонт').distinct().count(),
+            'design': all_users.filter(groups__name='Дизайн').distinct().count(),
+            'media': all_users.filter(groups__name='Медиа').distinct().count(),
         }
         
-        return Response({
+        response_data = {
             'period_stats': period_stats,
             'monthly_trends': monthly_trends,
             'current_totals': current_totals,
@@ -954,7 +1005,13 @@ class ReportsAnalyticsView(views.APIView):
                 'start_date': start_date_str or start_date.strftime('%Y-%m-%d'),
                 'end_date': end_date_str or end_date.strftime('%Y-%m-%d')
             }
-        }, status=status.HTTP_200_OK)
+        }
+        
+        # Agar daily_trends bo'lsa, qo'shamiz
+        if daily_trends:
+            response_data['daily_trends'] = daily_trends
+        
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 @extend_schema(
