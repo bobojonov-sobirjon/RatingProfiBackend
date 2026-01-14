@@ -157,10 +157,13 @@ class UpcomingEventListView(views.APIView):
                 django_models.Q(about_event__icontains=search)
             )
         
-        # Сортировка
-        ordering = self.request.query_params.get('ordering', 'event_date')
+        # Сортировка - по умолчанию новые сначала (по id или created_at)
+        ordering = self.request.query_params.get('ordering')
         if ordering:
             queryset = queryset.order_by(ordering)
+        else:
+            # По умолчанию: новые сначала (по убыванию id)
+            queryset = queryset.order_by('-id')
         
         return queryset
     

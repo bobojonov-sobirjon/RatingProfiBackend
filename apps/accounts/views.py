@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.pagination import LimitOffsetPagination
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.contrib.auth import get_user_model, models as auth_models
 from django.db import models as django_models
 from django.utils import timezone
@@ -1807,6 +1808,7 @@ class DesignerQuestionnaireDetailView(views.APIView):
     DELETE /api/v1/accounts/questionnaires/{id}/ - удалить анкету
     """
     permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_object(self, pk, request=None):
         try:
@@ -2294,6 +2296,7 @@ class RepairQuestionnaireDetailView(views.APIView):
     DELETE /api/v1/accounts/repair-questionnaires/{id}/ - удалить анкету
     """
     permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_object(self, pk, request=None):
         try:
@@ -2307,7 +2310,7 @@ class RepairQuestionnaireDetailView(views.APIView):
             raise NotFound("Анкета не найдена")
     
     def get(self, request, pk):
-        questionnaire = self.get_object(pk)
+        questionnaire = self.get_object(pk, request)
         serializer = RepairQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -3078,6 +3081,7 @@ class SupplierQuestionnaireDetailView(views.APIView):
     DELETE /api/v1/accounts/supplier-questionnaires/{id}/ - удалить анкету
     """
     permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_object(self, pk, request=None):
         try:
@@ -3528,6 +3532,7 @@ class MediaQuestionnaireDetailView(views.APIView):
     DELETE /api/v1/accounts/media-questionnaires/{id}/ - удалить анкету
     """
     permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_object(self, pk, request=None):
         try:
