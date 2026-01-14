@@ -457,6 +457,9 @@ class MediaQuestionnaireAdmin(admin.ModelAdmin):
         ('Дополнительная информация', {
             'fields': ('additional_info',)
         }),
+        ('Логотип компании', {
+            'fields': ('company_logo',)
+        }),
         ('Временные метки', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)

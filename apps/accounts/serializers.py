@@ -973,8 +973,32 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
     
+    def to_internal_value(self, data):
+        """Parse JSON fields from form-data"""
+        # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
+        if hasattr(data, 'get'):
+            json_fields = ['services', 'segments', 'work_cities', 'other_contacts']
+            for field in json_fields:
+                if field in data:
+                    value = data.get(field)
+                    if isinstance(value, str):
+                        try:
+                            import json
+                            # QueryDict bo'lsa, mutable copy olish kerak
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = json.loads(value)
+                        except (json.JSONDecodeError, ValueError):
+                            # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = []
+        return super().to_internal_value(data)
+    
     def validate_services(self, value):
         """Проверка услуг"""
+        if not isinstance(value, list):
+            return []
         valid_services = [choice[0] for choice in DesignerQuestionnaire.SERVICES_CHOICES]
         for service in value:
             if service not in valid_services:
@@ -983,10 +1007,24 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
     
     def validate_segments(self, value):
         """Проверка сегментов"""
+        if not isinstance(value, list):
+            return []
         valid_segments = [choice[0] for choice in DesignerQuestionnaire.SEGMENT_CHOICES]
         for segment in value:
             if segment not in valid_segments:
                 raise serializers.ValidationError(f"Неверный сегмент: {segment}")
+        return value
+    
+    def validate_work_cities(self, value):
+        """Проверка work_cities"""
+        if not isinstance(value, list):
+            return []
+        return value
+    
+    def validate_other_contacts(self, value):
+        """Проверка other_contacts"""
+        if not isinstance(value, list):
+            return []
         return value
 
 
@@ -1272,12 +1310,48 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
     
+    def to_internal_value(self, data):
+        """Parse JSON fields from form-data"""
+        # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
+        if hasattr(data, 'get'):
+            json_fields = ['segments', 'representative_cities', 'other_contacts']
+            for field in json_fields:
+                if field in data:
+                    value = data.get(field)
+                    if isinstance(value, str):
+                        try:
+                            import json
+                            # QueryDict bo'lsa, mutable copy olish kerak
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = json.loads(value)
+                        except (json.JSONDecodeError, ValueError):
+                            # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = []
+        return super().to_internal_value(data)
+    
     def validate_segments(self, value):
         """Проверка сегментов"""
+        if not isinstance(value, list):
+            return []
         valid_segments = [choice[0] for choice in RepairQuestionnaire.SEGMENT_CHOICES]
         for segment in value:
             if segment not in valid_segments:
                 raise serializers.ValidationError(f"Неверный сегмент: {segment}")
+        return value
+    
+    def validate_representative_cities(self, value):
+        """Проверка representative_cities"""
+        if not isinstance(value, list):
+            return []
+        return value
+    
+    def validate_other_contacts(self, value):
+        """Проверка other_contacts"""
+        if not isinstance(value, list):
+            return []
         return value
 
 
@@ -1561,12 +1635,48 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
     
+    def to_internal_value(self, data):
+        """Parse JSON fields from form-data"""
+        # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
+        if hasattr(data, 'get'):
+            json_fields = ['segments', 'representative_cities', 'other_contacts']
+            for field in json_fields:
+                if field in data:
+                    value = data.get(field)
+                    if isinstance(value, str):
+                        try:
+                            import json
+                            # QueryDict bo'lsa, mutable copy olish kerak
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = json.loads(value)
+                        except (json.JSONDecodeError, ValueError):
+                            # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = []
+        return super().to_internal_value(data)
+    
     def validate_segments(self, value):
         """Проверка сегментов"""
+        if not isinstance(value, list):
+            return []
         valid_segments = [choice[0] for choice in SupplierQuestionnaire.SEGMENT_CHOICES]
         for segment in value:
             if segment not in valid_segments:
                 raise serializers.ValidationError(f"Неверный сегмент: {segment}")
+        return value
+    
+    def validate_representative_cities(self, value):
+        """Проверка representative_cities"""
+        if not isinstance(value, list):
+            return []
+        return value
+    
+    def validate_other_contacts(self, value):
+        """Проверка other_contacts"""
+        if not isinstance(value, list):
+            return []
         return value
 
 
@@ -1706,6 +1816,7 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
             'rating_list',
             'reviews_list',
             'additional_info',
+            'company_logo',
             'created_at',
             'updated_at',
         ]
@@ -1716,12 +1827,50 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
     
+    def to_internal_value(self, data):
+        """Parse JSON fields from form-data"""
+        # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
+        # QueryDict yoki dict bo'lishi mumkin
+        if hasattr(data, 'get'):
+            # QueryDict yoki dict
+            json_fields = ['segments', 'representative_cities', 'other_contacts']
+            for field in json_fields:
+                if field in data:
+                    value = data.get(field)
+                    if isinstance(value, str):
+                        try:
+                            import json
+                            # QueryDict bo'lsa, mutable copy olish kerak
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = json.loads(value)
+                        except (json.JSONDecodeError, ValueError):
+                            # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = []
+        return super().to_internal_value(data)
+    
     def validate_segments(self, value):
         """Проверка сегментов"""
+        if not isinstance(value, list):
+            return []
         valid_segments = [choice[0] for choice in MediaQuestionnaire.SEGMENT_CHOICES]
         for segment in value:
             if segment not in valid_segments:
                 raise serializers.ValidationError(f"Неверный сегмент: {segment}")
+        return value
+    
+    def validate_representative_cities(self, value):
+        """Проверка representative_cities"""
+        if not isinstance(value, list):
+            return []
+        return value
+    
+    def validate_other_contacts(self, value):
+        """Проверка other_contacts"""
+        if not isinstance(value, list):
+            return []
         return value
 
 

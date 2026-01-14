@@ -1172,13 +1172,12 @@ class MediaQuestionnaire(models.Model):
         verbose_name='Дополнительная информация'
     )
     
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Дата создания'
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name='Дата обновления'
+    # Логотип компании
+    company_logo = models.ImageField(
+        upload_to='media/logos/',
+        blank=True,
+        null=True,
+        verbose_name='Логотип компании (shaxsiy kabinet uchun)'
     )
     
     created_at = models.DateTimeField(

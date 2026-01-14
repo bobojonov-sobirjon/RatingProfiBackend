@@ -3721,6 +3721,7 @@ class MediaQuestionnaireListView(views.APIView):
       * yes - Да
       * no - Нет
     - additional_info: Дополнительная информация
+    - company_logo: Логотип компании (shaxsiy kabinet uchun) (файл)
     ''',
     request=MediaQuestionnaireSerializer,
     responses={
