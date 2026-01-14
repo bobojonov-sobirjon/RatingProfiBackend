@@ -747,13 +747,6 @@ class RepairQuestionnaire(models.Model):
         null=True,
         verbose_name='Логотип компании (shaxsiy kabinet uchun)'
     )
-    legal_entity_card = models.FileField(
-        upload_to='repairs/legal_cards/',
-        blank=True,
-        null=True,
-        verbose_name='Yuridik shaxs kartasi (shartnoma uchun)'
-    )
-    
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Дата создания'
@@ -989,13 +982,6 @@ class SupplierQuestionnaire(models.Model):
         null=True,
         verbose_name='Логотип компании (shaxsiy kabinet uchun)'
     )
-    legal_entity_card = models.FileField(
-        upload_to='suppliers/legal_cards/',
-        blank=True,
-        null=True,
-        verbose_name='Yuridik shaxs kartasi (shartnoma uchun)'
-    )
-    
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Дата создания'

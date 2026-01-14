@@ -293,7 +293,6 @@ class RepairQuestionnaireAdmin(admin.ModelAdmin):
             'fields': (
                 'data_processing_consent',
                 'company_logo',
-                'legal_entity_card',
             )
         }),
         ('Временные метки', {
@@ -377,7 +376,6 @@ class SupplierQuestionnaireAdmin(admin.ModelAdmin):
             'fields': (
                 'data_processing_consent',
                 'company_logo',
-                'legal_entity_card',
             )
         }),
         ('Сегменты', {

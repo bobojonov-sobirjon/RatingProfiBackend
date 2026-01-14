@@ -1846,6 +1846,146 @@ class DesignerQuestionnaireDetailView(views.APIView):
 
 
 @extend_schema(
+    tags=['Designer Questionnaires'],
+    summary='Архивировать анкету дизайнера',
+    description='''
+    PATCH: Архивировать анкету дизайнера (is_deleted=True)
+    
+    Требуется авторизация и права администратора (is_staff=True)
+    ''',
+    responses={
+        200: {'description': 'Анкета успешно архивирована'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут архивировать анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class DesignerQuestionnaireArchiveView(views.APIView):
+    """
+    Архивировать анкету дизайнера
+    PATCH /api/v1/accounts/questionnaires/{id}/archive/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может архивировать анкету")
+        try:
+            questionnaire = DesignerQuestionnaire.objects.get(pk=pk)
+        except DesignerQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        questionnaire.is_deleted = True
+        questionnaire.save()
+        serializer = DesignerQuestionnaireSerializer(questionnaire, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Designer Questionnaires'],
+    summary='Восстановить анкету дизайнера из архива',
+    description='''
+    PATCH: Восстановить анкету дизайнера из архива (is_deleted=False)
+    
+    Требуется авторизация и права администратора (is_staff=True)
+    ''',
+    responses={
+        200: {'description': 'Анкета успешно восстановлена из архива'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут восстанавливать анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class DesignerQuestionnaireRestoreView(views.APIView):
+    """
+    Восстановить анкету дизайнера из архива
+    PATCH /api/v1/accounts/questionnaires/{id}/restore/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может восстанавливать анкету")
+        try:
+            questionnaire = DesignerQuestionnaire.objects.get(pk=pk)
+        except DesignerQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        questionnaire.is_deleted = False
+        questionnaire.save()
+        serializer = DesignerQuestionnaireSerializer(questionnaire, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Repair Questionnaires'],
+    summary='Архивировать анкету ремонтной бригады / подрядчика',
+    description='''
+    PATCH: Архивировать анкету ремонтной бригады / подрядчика (is_deleted=True)
+    
+    Требуется авторизация и права администратора (is_staff=True)
+    ''',
+    responses={
+        200: {'description': 'Анкета успешно архивирована'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут архивировать анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class RepairQuestionnaireArchiveView(views.APIView):
+    """
+    Архивировать анкету ремонтной бригады / подрядчика
+    PATCH /api/v1/accounts/repair-questionnaires/{id}/archive/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может архивировать анкету")
+        try:
+            questionnaire = RepairQuestionnaire.objects.get(pk=pk)
+        except RepairQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        questionnaire.is_deleted = True
+        questionnaire.save()
+        serializer = RepairQuestionnaireSerializer(questionnaire, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Repair Questionnaires'],
+    summary='Восстановить анкету ремонтной бригады / подрядчика из архива',
+    description='''
+    PATCH: Восстановить анкету ремонтной бригады / подрядчика из архива (is_deleted=False)
+    
+    Требуется авторизация и права администратора (is_staff=True)
+    ''',
+    responses={
+        200: {'description': 'Анкета успешно восстановлена из архива'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут восстанавливать анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class RepairQuestionnaireRestoreView(views.APIView):
+    """
+    Восстановить анкету ремонтной бригады / подрядчика из архива
+    PATCH /api/v1/accounts/repair-questionnaires/{id}/restore/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может восстанавливать анкету")
+        try:
+            questionnaire = RepairQuestionnaire.objects.get(pk=pk)
+        except RepairQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        questionnaire.is_deleted = False
+        questionnaire.save()
+        serializer = RepairQuestionnaireSerializer(questionnaire, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
     tags=['Repair Questionnaires'],
     summary='Список анкет ремонтных бригад / подрядчиков',
     description='''
@@ -1906,7 +2046,6 @@ class DesignerQuestionnaireDetailView(views.APIView):
     - additional_info: Дополнительная информация (необязательное)
     - data_processing_consent: Согласие на обработку данных (обязательное, boolean)
     - company_logo: Логотип компании (shaxsiy kabinet uchun) (необязательное, файл)
-    - legal_entity_card: Yuridik shaxs kartasi (shartnoma uchun) (необязательное, файл)
     ''',
     request=RepairQuestionnaireSerializer,
     responses={
@@ -2278,7 +2417,6 @@ class RepairQuestionnaireListView(views.APIView):
     - additional_info: Дополнительная информация
     - data_processing_consent: Согласие на обработку данных (boolean)
     - company_logo: Логотип компании (shaxsiy kabinet uchun) (файл)
-    - legal_entity_card: Yuridik shaxs kartasi (shartnoma uchun) (файл)
     ''',
     request=RepairQuestionnaireSerializer,
     responses={
@@ -2724,7 +2862,6 @@ class RepairQuestionnaireStatusUpdateView(views.APIView):
       * other - Другое
     - data_processing_consent: Согласие на обработку данных (обязательное, boolean)
     - company_logo: Логотип компании (shaxsiy kabinet uchun) (необязательное, файл)
-    - legal_entity_card: Yuridik shaxs kartasi (shartnoma uchun) (необязательное, файл)
     ''',
     request=SupplierQuestionnaireSerializer,
     responses={
@@ -3063,7 +3200,6 @@ class SupplierQuestionnaireListView(views.APIView):
       * other - Другое
     - data_processing_consent: Согласие на обработку данных (boolean)
     - company_logo: Логотип компании (shaxsiy kabinet uchun) (файл)
-    - legal_entity_card: Yuridik shaxs kartasi (shartnoma uchun) (файл)
     ''',
     request=SupplierQuestionnaireSerializer,
     responses={
@@ -3116,6 +3252,76 @@ class SupplierQuestionnaireDetailView(views.APIView):
         questionnaire.is_deleted = True
         questionnaire.save()
         return Response({'message': 'Анкета успешно удалена'}, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Supplier Questionnaires'],
+    summary='Архивировать анкету поставщика / салона / фабрики',
+    description='''
+    PATCH: Архивировать анкету поставщика / салона / фабрики (is_deleted=True)
+    
+    Требуется авторизация и права администратора (is_staff=True)
+    ''',
+    responses={
+        200: {'description': 'Анкета успешно архивирована'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут архивировать анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class SupplierQuestionnaireArchiveView(views.APIView):
+    """
+    Архивировать анкету поставщика / салона / фабрики
+    PATCH /api/v1/accounts/supplier-questionnaires/{id}/archive/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может архивировать анкету")
+        try:
+            questionnaire = SupplierQuestionnaire.objects.get(pk=pk)
+        except SupplierQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        questionnaire.is_deleted = True
+        questionnaire.save()
+        serializer = SupplierQuestionnaireSerializer(questionnaire, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Supplier Questionnaires'],
+    summary='Восстановить анкету поставщика / салона / фабрики из архива',
+    description='''
+    PATCH: Восстановить анкету поставщика / салона / фабрики из архива (is_deleted=False)
+    
+    Требуется авторизация и права администратора (is_staff=True)
+    ''',
+    responses={
+        200: {'description': 'Анкета успешно восстановлена из архива'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут восстанавливать анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class SupplierQuestionnaireRestoreView(views.APIView):
+    """
+    Восстановить анкету поставщика / салона / фабрики из архива
+    PATCH /api/v1/accounts/supplier-questionnaires/{id}/restore/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может восстанавливать анкету")
+        try:
+            questionnaire = SupplierQuestionnaire.objects.get(pk=pk)
+        except SupplierQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        questionnaire.is_deleted = False
+        questionnaire.save()
+        serializer = SupplierQuestionnaireSerializer(questionnaire, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -3567,6 +3773,76 @@ class MediaQuestionnaireDetailView(views.APIView):
         questionnaire.is_deleted = True
         questionnaire.save()
         return Response({'message': 'Анкета успешно удалена'}, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Media Questionnaires'],
+    summary='Архивировать анкету медиа пространства / интерьерного журнала',
+    description='''
+    PATCH: Архивировать анкету медиа пространства / интерьерного журнала (is_deleted=True)
+    
+    Требуется авторизация и права администратора (is_staff=True)
+    ''',
+    responses={
+        200: {'description': 'Анкета успешно архивирована'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут архивировать анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class MediaQuestionnaireArchiveView(views.APIView):
+    """
+    Архивировать анкету медиа пространства / интерьерного журнала
+    PATCH /api/v1/accounts/media-questionnaires/{id}/archive/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может архивировать анкету")
+        try:
+            questionnaire = MediaQuestionnaire.objects.get(pk=pk)
+        except MediaQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        questionnaire.is_deleted = True
+        questionnaire.save()
+        serializer = MediaQuestionnaireSerializer(questionnaire, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Media Questionnaires'],
+    summary='Восстановить анкету медиа пространства / интерьерного журнала из архива',
+    description='''
+    PATCH: Восстановить анкету медиа пространства / интерьерного журнала из архива (is_deleted=False)
+    
+    Требуется авторизация и права администратора (is_staff=True)
+    ''',
+    responses={
+        200: {'description': 'Анкета успешно восстановлена из архива'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут восстанавливать анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class MediaQuestionnaireRestoreView(views.APIView):
+    """
+    Восстановить анкету медиа пространства / интерьерного журнала из архива
+    PATCH /api/v1/accounts/media-questionnaires/{id}/restore/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может восстанавливать анкету")
+        try:
+            questionnaire = MediaQuestionnaire.objects.get(pk=pk)
+        except MediaQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        questionnaire.is_deleted = False
+        questionnaire.save()
+        serializer = MediaQuestionnaireSerializer(questionnaire, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @extend_schema(

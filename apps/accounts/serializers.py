@@ -1262,7 +1262,6 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             'reviews_list',
             'data_processing_consent',
             'company_logo',
-            'legal_entity_card',
             'created_at',
             'updated_at',
         ]
@@ -1552,7 +1551,6 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             'reviews_list',
             'data_processing_consent',
             'company_logo',
-            'legal_entity_card',
             'created_at',
             'updated_at',
         ]
