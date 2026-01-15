@@ -35,12 +35,16 @@ from .views import (
     MediaQuestionnaireModerationView,
     DesignerQuestionnaireArchiveView,
     DesignerQuestionnaireRestoreView,
+    DesignerQuestionnaireDeleteView,
     RepairQuestionnaireArchiveView,
     RepairQuestionnaireRestoreView,
+    RepairQuestionnaireDeleteView,
     SupplierQuestionnaireArchiveView,
     SupplierQuestionnaireRestoreView,
+    SupplierQuestionnaireDeleteView,
     MediaQuestionnaireArchiveView,
     MediaQuestionnaireRestoreView,
+    MediaQuestionnaireDeleteView,
     UserRolesView,
 )
 
@@ -71,6 +75,7 @@ urlpatterns = [
     path('questionnaires/<int:pk>/moderation/', DesignerQuestionnaireModerationView.as_view(), name='questionnaire-moderation'),
     path('questionnaires/<int:pk>/archive/', DesignerQuestionnaireArchiveView.as_view(), name='questionnaire-archive'),
     path('questionnaires/<int:pk>/restore/', DesignerQuestionnaireRestoreView.as_view(), name='questionnaire-restore'),
+    path('questionnaires/<int:pk>/delete/', DesignerQuestionnaireDeleteView.as_view(), name='questionnaire-delete'),
     
     path('repair-questionnaires/', RepairQuestionnaireListView.as_view(), name='repair-questionnaire-list'),
     path('repair-questionnaires/filter-choices/', RepairQuestionnaireFilterChoicesView.as_view(), name='repair-questionnaire-filter-choices'),
@@ -79,6 +84,7 @@ urlpatterns = [
     path('repair-questionnaires/<int:pk>/moderation/', RepairQuestionnaireModerationView.as_view(), name='repair-questionnaire-moderation'),
     path('repair-questionnaires/<int:pk>/archive/', RepairQuestionnaireArchiveView.as_view(), name='repair-questionnaire-archive'),
     path('repair-questionnaires/<int:pk>/restore/', RepairQuestionnaireRestoreView.as_view(), name='repair-questionnaire-restore'),
+    path('repair-questionnaires/<int:pk>/delete/', RepairQuestionnaireDeleteView.as_view(), name='repair-questionnaire-delete'),
     
     path('supplier-questionnaires/', SupplierQuestionnaireListView.as_view(), name='supplier-questionnaire-list'),
     path('supplier-questionnaires/filter-choices/', SupplierQuestionnaireFilterChoicesView.as_view(), name='supplier-questionnaire-filter-choices'),
@@ -87,6 +93,7 @@ urlpatterns = [
     path('supplier-questionnaires/<int:pk>/moderation/', SupplierQuestionnaireModerationView.as_view(), name='supplier-questionnaire-moderation'),
     path('supplier-questionnaires/<int:pk>/archive/', SupplierQuestionnaireArchiveView.as_view(), name='supplier-questionnaire-archive'),
     path('supplier-questionnaires/<int:pk>/restore/', SupplierQuestionnaireRestoreView.as_view(), name='supplier-questionnaire-restore'),
+    path('supplier-questionnaires/<int:pk>/delete/', SupplierQuestionnaireDeleteView.as_view(), name='supplier-questionnaire-delete'),
     
     path('media-questionnaires/', MediaQuestionnaireListView.as_view(), name='media-questionnaire-list'),
     path('media-questionnaires/<int:pk>/', MediaQuestionnaireDetailView.as_view(), name='media-questionnaire-detail'),
@@ -94,4 +101,5 @@ urlpatterns = [
     path('media-questionnaires/<int:pk>/moderation/', MediaQuestionnaireModerationView.as_view(), name='media-questionnaire-moderation'),
     path('media-questionnaires/<int:pk>/archive/', MediaQuestionnaireArchiveView.as_view(), name='media-questionnaire-archive'),
     path('media-questionnaires/<int:pk>/restore/', MediaQuestionnaireRestoreView.as_view(), name='media-questionnaire-restore'),
+    path('media-questionnaires/<int:pk>/delete/', MediaQuestionnaireDeleteView.as_view(), name='media-questionnaire-delete'),
 ] 

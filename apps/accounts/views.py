@@ -723,7 +723,7 @@ class UserRolesView(views.APIView):
     - Ремонт (repair)
     
     Фильтры:
-    - role: Фильтр по роли (designer, repair, supplier, media)
+    - group: Фильтр по группе (Дизайн, Ремонт, Поставщик, Медиа) - русские названия
     - city: Фильтр по городу
     - search: Поиск по имени, описанию, названию компании
     - is_active_profile: Фильтр по активным профилям (true/false)
@@ -731,6 +731,43 @@ class UserRolesView(views.APIView):
     
     По умолчанию возвращаются только пользователи с is_active_profile=True
     ''',
+    parameters=[
+        OpenApiParameter(
+            name='group',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по группе. Доступные значения: Дизайн, Ремонт, Поставщик, Медиа',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='city',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по городу (частичное совпадение)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='search',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Поиск по имени, описанию, названию компании (частичное совпадение)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='is_active_profile',
+            type=bool,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по активным профилям (true/false). По умолчанию: true',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='ordering',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Сортировка. Доступные значения: created_at, -created_at, full_name, -full_name. По умолчанию: -created_at',
+            required=False,
+        ),
+    ],
     responses={
         200: UserPublicSerializer(many=True)
     }
@@ -759,10 +796,10 @@ class UserListView(views.APIView):
             elif is_active_profile.lower() == 'false':
                 queryset = queryset.filter(is_active_profile=False)
         
-        # Фильтры
-        role = self.request.query_params.get('role')
-        if role and role in allowed_roles:
-            queryset = queryset.filter(groups__name=role).distinct()
+        # Фильтр по группе
+        group_filter = self.request.query_params.get('group')
+        if group_filter and group_filter in allowed_roles:
+            queryset = queryset.filter(groups__name=group_filter).distinct()
         
         city = self.request.query_params.get('city')
         if city:
@@ -1916,6 +1953,81 @@ class DesignerQuestionnaireRestoreView(views.APIView):
 
 
 @extend_schema(
+    tags=['Designer Questionnaires'],
+    summary='Удалить анкету дизайнера (полное удаление)',
+    description='''
+    DELETE: Полностью удалить анкету дизайнера из базы данных
+    
+    ⚠️ ВНИМАНИЕ: Это действие необратимо! Анкета будет полностью удалена из базы данных.
+    
+    Требуется:
+    - Авторизация и права администратора (is_staff=True)
+    - Подтверждение действия через параметр confirm=true в query string или в теле запроса
+    
+    Пример запроса:
+    DELETE /api/v1/accounts/questionnaires/{id}/delete/?confirm=true
+    или
+    DELETE /api/v1/accounts/questionnaires/{id}/delete/
+    Body: {"confirm": true}
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='confirm',
+            type=bool,
+            location=OpenApiParameter.QUERY,
+            description='Подтверждение удаления (обязательно: true)',
+            required=True,
+        ),
+    ],
+    responses={
+        204: {'description': 'Анкета успешно удалена'},
+        400: {'description': 'Требуется подтверждение удаления (confirm=true)'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут удалять анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class DesignerQuestionnaireDeleteView(views.APIView):
+    """
+    Полностью удалить анкету дизайнера из базы данных
+    DELETE /api/v1/accounts/questionnaires/{id}/delete/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def delete(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может удалять анкету")
+        
+        # Проверка подтверждения
+        confirm = request.query_params.get('confirm', 'false').lower() == 'true'
+        if not confirm:
+            # Проверяем в теле запроса
+            if hasattr(request, 'data') and isinstance(request.data, dict):
+                confirm = request.data.get('confirm', False)
+                if isinstance(confirm, str):
+                    confirm = confirm.lower() == 'true'
+                else:
+                    confirm = bool(confirm)
+        
+        if not confirm:
+            return Response(
+                {'error': 'Требуется подтверждение удаления. Добавьте параметр confirm=true в query string или в теле запроса.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            questionnaire = DesignerQuestionnaire.objects.get(pk=pk)
+        except DesignerQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        # Полное удаление из базы данных
+        questionnaire.delete()
+        return Response(
+            {'message': 'Анкета успешно удалена из базы данных'},
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+
+@extend_schema(
     tags=['Repair Questionnaires'],
     summary='Архивировать анкету ремонтной бригады / подрядчика',
     description='''
@@ -1983,6 +2095,81 @@ class RepairQuestionnaireRestoreView(views.APIView):
         questionnaire.save()
         serializer = RepairQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Repair Questionnaires'],
+    summary='Удалить анкету ремонтной бригады / подрядчика (полное удаление)',
+    description='''
+    DELETE: Полностью удалить анкету ремонтной бригады / подрядчика из базы данных
+    
+    ⚠️ ВНИМАНИЕ: Это действие необратимо! Анкета будет полностью удалена из базы данных.
+    
+    Требуется:
+    - Авторизация и права администратора (is_staff=True)
+    - Подтверждение действия через параметр confirm=true в query string или в теле запроса
+    
+    Пример запроса:
+    DELETE /api/v1/accounts/repair-questionnaires/{id}/delete/?confirm=true
+    или
+    DELETE /api/v1/accounts/repair-questionnaires/{id}/delete/
+    Body: {"confirm": true}
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='confirm',
+            type=bool,
+            location=OpenApiParameter.QUERY,
+            description='Подтверждение удаления (обязательно: true)',
+            required=True,
+        ),
+    ],
+    responses={
+        204: {'description': 'Анкета успешно удалена'},
+        400: {'description': 'Требуется подтверждение удаления (confirm=true)'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут удалять анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class RepairQuestionnaireDeleteView(views.APIView):
+    """
+    Полностью удалить анкету ремонтной бригады / подрядчика из базы данных
+    DELETE /api/v1/accounts/repair-questionnaires/{id}/delete/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def delete(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может удалять анкету")
+        
+        # Проверка подтверждения
+        confirm = request.query_params.get('confirm', 'false').lower() == 'true'
+        if not confirm:
+            # Проверяем в теле запроса
+            if hasattr(request, 'data') and isinstance(request.data, dict):
+                confirm = request.data.get('confirm', False)
+                if isinstance(confirm, str):
+                    confirm = confirm.lower() == 'true'
+                else:
+                    confirm = bool(confirm)
+        
+        if not confirm:
+            return Response(
+                {'error': 'Требуется подтверждение удаления. Добавьте параметр confirm=true в query string или в теле запроса.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            questionnaire = RepairQuestionnaire.objects.get(pk=pk)
+        except RepairQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        # Полное удаление из базы данных
+        questionnaire.delete()
+        return Response(
+            {'message': 'Анкета успешно удалена из базы данных'},
+            status=status.HTTP_204_NO_CONTENT
+        )
 
 
 @extend_schema(
@@ -3326,6 +3513,81 @@ class SupplierQuestionnaireRestoreView(views.APIView):
 
 @extend_schema(
     tags=['Supplier Questionnaires'],
+    summary='Удалить анкету поставщика / салона / фабрики (полное удаление)',
+    description='''
+    DELETE: Полностью удалить анкету поставщика / салона / фабрики из базы данных
+    
+    ⚠️ ВНИМАНИЕ: Это действие необратимо! Анкета будет полностью удалена из базы данных.
+    
+    Требуется:
+    - Авторизация и права администратора (is_staff=True)
+    - Подтверждение действия через параметр confirm=true в query string или в теле запроса
+    
+    Пример запроса:
+    DELETE /api/v1/accounts/supplier-questionnaires/{id}/delete/?confirm=true
+    или
+    DELETE /api/v1/accounts/supplier-questionnaires/{id}/delete/
+    Body: {"confirm": true}
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='confirm',
+            type=bool,
+            location=OpenApiParameter.QUERY,
+            description='Подтверждение удаления (обязательно: true)',
+            required=True,
+        ),
+    ],
+    responses={
+        204: {'description': 'Анкета успешно удалена'},
+        400: {'description': 'Требуется подтверждение удаления (confirm=true)'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут удалять анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class SupplierQuestionnaireDeleteView(views.APIView):
+    """
+    Полностью удалить анкету поставщика / салона / фабрики из базы данных
+    DELETE /api/v1/accounts/supplier-questionnaires/{id}/delete/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def delete(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может удалять анкету")
+        
+        # Проверка подтверждения
+        confirm = request.query_params.get('confirm', 'false').lower() == 'true'
+        if not confirm:
+            # Проверяем в теле запроса
+            if hasattr(request, 'data') and isinstance(request.data, dict):
+                confirm = request.data.get('confirm', False)
+                if isinstance(confirm, str):
+                    confirm = confirm.lower() == 'true'
+                else:
+                    confirm = bool(confirm)
+        
+        if not confirm:
+            return Response(
+                {'error': 'Требуется подтверждение удаления. Добавьте параметр confirm=true в query string или в теле запроса.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            questionnaire = SupplierQuestionnaire.objects.get(pk=pk)
+        except SupplierQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        # Полное удаление из базы данных
+        questionnaire.delete()
+        return Response(
+            {'message': 'Анкета успешно удалена из базы данных'},
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+
+@extend_schema(
+    tags=['Supplier Questionnaires'],
     summary='Получить варианты для фильтров анкет поставщиков / салонов / фабрик',
     description='''
     GET: Получить все доступные варианты для фильтров анкет поставщиков / салонов / фабрик
@@ -3844,6 +4106,81 @@ class MediaQuestionnaireRestoreView(views.APIView):
         questionnaire.save()
         serializer = MediaQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Media Questionnaires'],
+    summary='Удалить анкету медиа пространства / интерьерного журнала (полное удаление)',
+    description='''
+    DELETE: Полностью удалить анкету медиа пространства / интерьерного журнала из базы данных
+    
+    ⚠️ ВНИМАНИЕ: Это действие необратимо! Анкета будет полностью удалена из базы данных.
+    
+    Требуется:
+    - Авторизация и права администратора (is_staff=True)
+    - Подтверждение действия через параметр confirm=true в query string или в теле запроса
+    
+    Пример запроса:
+    DELETE /api/v1/accounts/media-questionnaires/{id}/delete/?confirm=true
+    или
+    DELETE /api/v1/accounts/media-questionnaires/{id}/delete/
+    Body: {"confirm": true}
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='confirm',
+            type=bool,
+            location=OpenApiParameter.QUERY,
+            description='Подтверждение удаления (обязательно: true)',
+            required=True,
+        ),
+    ],
+    responses={
+        204: {'description': 'Анкета успешно удалена'},
+        400: {'description': 'Требуется подтверждение удаления (confirm=true)'},
+        403: {'description': 'Доступ запрещен. Только администраторы могут удалять анкеты'},
+        404: {'description': 'Анкета не найдена'}
+    }
+)
+class MediaQuestionnaireDeleteView(views.APIView):
+    """
+    Полностью удалить анкету медиа пространства / интерьерного журнала из базы данных
+    DELETE /api/v1/accounts/media-questionnaires/{id}/delete/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def delete(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied("Только администратор может удалять анкету")
+        
+        # Проверка подтверждения
+        confirm = request.query_params.get('confirm', 'false').lower() == 'true'
+        if not confirm:
+            # Проверяем в теле запроса
+            if hasattr(request, 'data') and isinstance(request.data, dict):
+                confirm = request.data.get('confirm', False)
+                if isinstance(confirm, str):
+                    confirm = confirm.lower() == 'true'
+                else:
+                    confirm = bool(confirm)
+        
+        if not confirm:
+            return Response(
+                {'error': 'Требуется подтверждение удаления. Добавьте параметр confirm=true в query string или в теле запроса.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            questionnaire = MediaQuestionnaire.objects.get(pk=pk)
+        except MediaQuestionnaire.DoesNotExist:
+            raise NotFound("Анкета не найдена")
+        
+        # Полное удаление из базы данных
+        questionnaire.delete()
+        return Response(
+            {'message': 'Анкета успешно удалена из базы данных'},
+            status=status.HTTP_204_NO_CONTENT
+        )
 
 
 @extend_schema(

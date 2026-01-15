@@ -455,10 +455,33 @@ class UpcomingEventDetailView(views.APIView):
     Фильтры:
     - group: Фильтр по группе (Дизайн, Ремонт, Поставщик, Медиа)
     - search: Поиск по названию организации, ФИО
-    - ordering: Сортировка (total_rating_count, -total_rating_count, positive_rating_count, -positive_rating_count)
+    - ordering: Сортировка (total_rating_count, -total_rating_count, positive_rating_count, -positive_rating_count, constructive_rating_count, -constructive_rating_count)
     
     Требуется аутентификация.
     ''',
+    parameters=[
+        OpenApiParameter(
+            name='group',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Фильтр по группе. Доступные значения: Дизайн, Ремонт, Поставщик, Медиа',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='search',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Поиск по названию организации или ФИО (частичное совпадение)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='ordering',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Сортировка. Доступные значения: total_rating_count, -total_rating_count, positive_rating_count, -positive_rating_count, constructive_rating_count, -constructive_rating_count. По умолчанию: -total_rating_count',
+            required=False,
+        ),
+    ],
     responses={
         200: {'description': 'Список всех анкет с рейтингами'}
     }
@@ -870,7 +893,7 @@ class ReportsAnalyticsView(views.APIView):
                 created_at__gte=twelve_months_ago,
                 groups__name__in=allowed_groups
             ).prefetch_related('groups').distinct().annotate(
-                month=TruncMonth('created_at')
+            month=TruncMonth('created_at')
             ).values('month', 'id').order_by('month')
         
         # Формируем структуру для графика

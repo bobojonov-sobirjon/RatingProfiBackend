@@ -972,6 +972,25 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+        extra_kwargs = {
+            field: {'required': False} for field in [
+                'full_name', 'full_name_en', 'phone', 'birth_date', 'email', 'city',
+                'services', 'work_type', 'segments', 'unique_trade_proposal',
+                'vk', 'telegram_channel', 'pinterest', 'instagram', 'website',
+                'other_contacts', 'service_packages_description', 'vat_payment',
+                'supplier_contractor_recommendation_terms', 'additional_info',
+                'data_processing_consent', 'photo', 'work_cities', 'cooperation_terms',
+                'welcome_message', 'group'
+            ]
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # PUT request uchun barcha fieldlarni required=False qilish
+        if self.partial:
+            for field_name, field in self.fields.items():
+                if field_name not in self.Meta.read_only_fields:
+                    field.required = False
     
     def to_internal_value(self, data):
         """Parse JSON fields from form-data"""
@@ -1309,6 +1328,25 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+        extra_kwargs = {
+            field: {'required': False} for field in [
+                'full_name', 'phone', 'brand_name', 'email', 'responsible_person',
+                'representative_cities', 'business_form', 'work_list', 'welcome_message',
+                'cooperation_terms', 'project_timelines', 'segments', 'vk',
+                'telegram_channel', 'pinterest', 'instagram', 'website', 'other_contacts',
+                'work_format', 'vat_payment', 'guarantees', 'designer_supplier_terms',
+                'magazine_cards', 'additional_info', 'data_processing_consent',
+                'company_logo', 'group', 'about_company', 'terms_of_cooperation'
+            ]
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # PUT request uchun barcha fieldlarni required=False qilish
+        if self.partial:
+            for field_name, field in self.fields.items():
+                if field_name not in self.Meta.read_only_fields:
+                    field.required = False
     
     def to_internal_value(self, data):
         """Parse JSON fields from form-data"""
@@ -1634,6 +1672,36 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+        extra_kwargs = {
+            field: {'required': False} for field in [
+                'full_name', 'phone', 'brand_name', 'email', 'responsible_person',
+                'representative_cities', 'business_form', 'product_assortment',
+                'welcome_message', 'cooperation_terms', 'segments', 'vk',
+                'telegram_channel', 'pinterest', 'instagram', 'website', 'other_contacts',
+                'delivery_terms', 'vat_payment', 'guarantees', 'designer_contractor_terms',
+                'magazine_cards', 'data_processing_consent', 'company_logo', 'group',
+                'about_company', 'terms_of_cooperation'
+            ]
+        }
+        extra_kwargs = {
+            field: {'required': False} for field in [
+                'full_name', 'phone', 'brand_name', 'email', 'responsible_person',
+                'representative_cities', 'business_form', 'product_assortment',
+                'welcome_message', 'cooperation_terms', 'segments', 'vk',
+                'telegram_channel', 'pinterest', 'instagram', 'website', 'other_contacts',
+                'delivery_terms', 'vat_payment', 'guarantees', 'designer_contractor_terms',
+                'magazine_cards', 'data_processing_consent', 'company_logo', 'group',
+                'about_company', 'terms_of_cooperation'
+            ]
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # PUT request uchun barcha fieldlarni required=False qilish
+        if self.partial:
+            for field_name, field in self.fields.items():
+                if field_name not in self.Meta.read_only_fields:
+                    field.required = False
     
     def to_internal_value(self, data):
         """Parse JSON fields from form-data"""
@@ -1826,6 +1894,23 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+        extra_kwargs = {
+            field: {'required': False} for field in [
+                'full_name', 'phone', 'brand_name', 'email', 'responsible_person',
+                'representative_cities', 'business_form', 'activity_description',
+                'welcome_message', 'cooperation_terms', 'segments', 'vk',
+                'telegram_channel', 'pinterest', 'instagram', 'website', 'other_contacts',
+                'vat_payment', 'additional_info', 'company_logo', 'group'
+            ]
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # PUT request uchun barcha fieldlarni required=False qilish
+        if self.partial:
+            for field_name, field in self.fields.items():
+                if field_name not in self.Meta.read_only_fields:
+                    field.required = False
     
     def to_internal_value(self, data):
         """Parse JSON fields from form-data"""
