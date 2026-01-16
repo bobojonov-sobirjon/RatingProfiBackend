@@ -925,6 +925,21 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         read_only=True
     )
     
+    # Multiple choice fields for Swagger
+    services = serializers.ListField(
+        child=serializers.ChoiceField(choices=DesignerQuestionnaire.SERVICES_CHOICES),
+        required=False,
+        allow_empty=True,
+        help_text="Список услуг (multiple choice). Пример: ['author_supervision', 'architecture']"
+    )
+    
+    segments = serializers.ListField(
+        child=serializers.ChoiceField(choices=DesignerQuestionnaire.SEGMENT_CHOICES),
+        required=False,
+        allow_empty=True,
+        help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
+    )
+    
     class Meta:
         model = DesignerQuestionnaire
         fields = [
@@ -1276,6 +1291,21 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         read_only=True
     )
     
+    # Multiple choice fields for Swagger
+    segments = serializers.ListField(
+        child=serializers.ChoiceField(choices=RepairQuestionnaire.SEGMENT_CHOICES),
+        required=False,
+        allow_empty=True,
+        help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
+    )
+    
+    magazine_cards = serializers.ListField(
+        child=serializers.ChoiceField(choices=RepairQuestionnaire.MAGAZINE_CARD_CHOICES),
+        required=False,
+        allow_empty=True,
+        help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
+    )
+    
     class Meta:
         model = RepairQuestionnaire
         fields = [
@@ -1368,7 +1398,35 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = []
+            # magazine_cards - list bo'lsa, birinchi elementni olamiz (CharField uchun)
+            if 'magazine_cards' in data:
+                value = data.get('magazine_cards')
+                if isinstance(value, list) and len(value) > 0:
+                    if hasattr(data, '_mutable') and not data._mutable:
+                        data._mutable = True
+                    data['magazine_cards'] = value[0]  # Birinchi elementni olamiz
+                elif isinstance(value, str):
+                    # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
+                    try:
+                        import json
+                        parsed = json.loads(value)
+                        if isinstance(parsed, list) and len(parsed) > 0:
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data['magazine_cards'] = parsed[0]
+                    except (json.JSONDecodeError, ValueError):
+                        pass  # String bo'lib qoladi
         return super().to_internal_value(data)
+    
+    def to_representation(self, instance):
+        """Convert CharField magazine_cards to list for Swagger"""
+        data = super().to_representation(instance)
+        if 'magazine_cards' in data and data['magazine_cards']:
+            # CharField qiymatini list ga o'zgartiramiz
+            data['magazine_cards'] = [data['magazine_cards']]
+        elif 'magazine_cards' in data:
+            data['magazine_cards'] = []
+        return data
     
     def validate_segments(self, value):
         """Проверка сегментов"""
@@ -1378,6 +1436,22 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         for segment in value:
             if segment not in valid_segments:
                 raise serializers.ValidationError(f"Неверный сегмент: {segment}")
+        return value
+    
+    def validate_magazine_cards(self, value):
+        """Проверка magazine_cards - list bo'lsa, birinchi elementni qaytaramiz"""
+        if isinstance(value, list):
+            if len(value) > 0:
+                valid_cards = [choice[0] for choice in RepairQuestionnaire.MAGAZINE_CARD_CHOICES]
+                if value[0] not in valid_cards:
+                    raise serializers.ValidationError(f"Неверная карточка журнала: {value[0]}")
+                return value[0]  # Birinchi elementni qaytaramiz (CharField uchun)
+            return None
+        elif isinstance(value, str):
+            valid_cards = [choice[0] for choice in RepairQuestionnaire.MAGAZINE_CARD_CHOICES]
+            if value not in valid_cards:
+                raise serializers.ValidationError(f"Неверная карточка журнала: {value}")
+            return value
         return value
     
     def validate_representative_cities(self, value):
@@ -1622,6 +1696,21 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         read_only=True
     )
     
+    # Multiple choice fields for Swagger
+    segments = serializers.ListField(
+        child=serializers.ChoiceField(choices=SupplierQuestionnaire.SEGMENT_CHOICES),
+        required=False,
+        allow_empty=True,
+        help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
+    )
+    
+    magazine_cards = serializers.ListField(
+        child=serializers.ChoiceField(choices=SupplierQuestionnaire.MAGAZINE_CARD_CHOICES),
+        required=False,
+        allow_empty=True,
+        help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
+    )
+    
     class Meta:
         model = SupplierQuestionnaire
         fields = [
@@ -1683,17 +1772,6 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                 'about_company', 'terms_of_cooperation'
             ]
         }
-        extra_kwargs = {
-            field: {'required': False} for field in [
-                'full_name', 'phone', 'brand_name', 'email', 'responsible_person',
-                'representative_cities', 'business_form', 'product_assortment',
-                'welcome_message', 'cooperation_terms', 'segments', 'vk',
-                'telegram_channel', 'pinterest', 'instagram', 'website', 'other_contacts',
-                'delivery_terms', 'vat_payment', 'guarantees', 'designer_contractor_terms',
-                'magazine_cards', 'data_processing_consent', 'company_logo', 'group',
-                'about_company', 'terms_of_cooperation'
-            ]
-        }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1723,7 +1801,35 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = []
+            # magazine_cards - list bo'lsa, birinchi elementni olamiz (CharField uchun)
+            if 'magazine_cards' in data:
+                value = data.get('magazine_cards')
+                if isinstance(value, list) and len(value) > 0:
+                    if hasattr(data, '_mutable') and not data._mutable:
+                        data._mutable = True
+                    data['magazine_cards'] = value[0]  # Birinchi elementni olamiz
+                elif isinstance(value, str):
+                    # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
+                    try:
+                        import json
+                        parsed = json.loads(value)
+                        if isinstance(parsed, list) and len(parsed) > 0:
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data['magazine_cards'] = parsed[0]
+                    except (json.JSONDecodeError, ValueError):
+                        pass  # String bo'lib qoladi
         return super().to_internal_value(data)
+    
+    def to_representation(self, instance):
+        """Convert CharField magazine_cards to list for Swagger"""
+        data = super().to_representation(instance)
+        if 'magazine_cards' in data and data['magazine_cards']:
+            # CharField qiymatini list ga o'zgartiramiz
+            data['magazine_cards'] = [data['magazine_cards']]
+        elif 'magazine_cards' in data:
+            data['magazine_cards'] = []
+        return data
     
     def validate_segments(self, value):
         """Проверка сегментов"""
@@ -1733,6 +1839,22 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         for segment in value:
             if segment not in valid_segments:
                 raise serializers.ValidationError(f"Неверный сегмент: {segment}")
+        return value
+    
+    def validate_magazine_cards(self, value):
+        """Проверка magazine_cards - list bo'lsa, birinchi elementni qaytaramiz"""
+        if isinstance(value, list):
+            if len(value) > 0:
+                valid_cards = [choice[0] for choice in SupplierQuestionnaire.MAGAZINE_CARD_CHOICES]
+                if value[0] not in valid_cards:
+                    raise serializers.ValidationError(f"Неверная карточка журнала: {value[0]}")
+                return value[0]  # Birinchi elementni qaytaramiz (CharField uchun)
+            return None
+        elif isinstance(value, str):
+            valid_cards = [choice[0] for choice in SupplierQuestionnaire.MAGAZINE_CARD_CHOICES]
+            if value not in valid_cards:
+                raise serializers.ValidationError(f"Неверная карточка журнала: {value}")
+            return value
         return value
     
     def validate_representative_cities(self, value):
@@ -1850,6 +1972,14 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(
         source='get_status_display',
         read_only=True
+    )
+    
+    # Multiple choice fields for Swagger
+    segments = serializers.ListField(
+        child=serializers.ChoiceField(choices=MediaQuestionnaire.SEGMENT_CHOICES),
+        required=False,
+        allow_empty=True,
+        help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
     
     class Meta:
