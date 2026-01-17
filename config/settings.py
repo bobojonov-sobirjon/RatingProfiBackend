@@ -226,7 +226,7 @@ SPECTACULAR_SETTINGS = {
     'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
     'REDOC_DIST': 'SIDECAR',
     'SCHEMA_PATH_PREFIX': '/api/v1/',
-    'COMPONENT_SPLIT_REQUEST': True,
+    'COMPONENT_SPLIT_REQUEST': False,  # False qildik, chunki form-data va JSON bir xil schema ishlatadi
     'COMPONENT_NO_READ_ONLY_REQUIRED': True,
     'ENUM_NAME_OVERRIDES': {
         'Status5bbEnum': 'ReviewStatusEnum',

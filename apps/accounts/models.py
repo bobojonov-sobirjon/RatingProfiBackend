@@ -718,12 +718,10 @@ class RepairQuestionnaire(models.Model):
         verbose_name='Условия работы с дизайнерами и/или поставщиками'
     )
     
-    # Выдаёте ли вы карточки журналов при рекомендации при заключении договора?
-    magazine_cards = models.CharField(
-        max_length=20,
-        choices=MAGAZINE_CARD_CHOICES,
+    # Выдаёте ли вы карточки журналов при рекомендации при заключении договора? (multiple choice)
+    magazine_cards = models.JSONField(
+        default=list,
         blank=True,
-        null=True,
         verbose_name='Выдаёте ли вы карточки журналов при рекомендации при заключении договора?'
     )
     
@@ -960,12 +958,10 @@ class SupplierQuestionnaire(models.Model):
         verbose_name='Условия работы с дизайнерами и/или подрядчиками'
     )
     
-    # Выдаёте ли вы карточки журналов при покупке продукции?
-    magazine_cards = models.CharField(
-        max_length=20,
-        choices=MAGAZINE_CARD_CHOICES,
+    # Выдаёте ли вы карточки журналов при покупке продукции? (multiple choice)
+    magazine_cards = models.JSONField(
+        default=list,
         blank=True,
-        null=True,
         verbose_name='Выдаёте ли вы карточки журналов при покупке продукции?'
     )
     

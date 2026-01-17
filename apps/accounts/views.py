@@ -1345,6 +1345,7 @@ class DesignerQuestionnaireListView(views.APIView):
     POST /api/v1/accounts/questionnaires/ - создать анкету
     """
     permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     @extend_schema(
         summary='Получить список анкет дизайнеров',
@@ -2248,6 +2249,7 @@ class RepairQuestionnaireListView(views.APIView):
     POST /api/v1/accounts/repair-questionnaires/ - создать анкету
     """
     permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     @extend_schema(
         summary='Получить список анкет ремонтных бригад / подрядчиков',
@@ -3064,6 +3066,7 @@ class SupplierQuestionnaireListView(views.APIView):
     POST /api/v1/accounts/supplier-questionnaires/ - создать анкету
     """
     permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     @extend_schema(
         summary='Получить список анкет поставщиков / салонов / фабрик',
@@ -3906,6 +3909,7 @@ class MediaQuestionnaireListView(views.APIView):
     POST /api/v1/accounts/media-questionnaires/ - создать анкету
     """
     permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get(self, request):
         # Staff userlar uchun barcha questionnaire'lar, oddiy userlar uchun faqat is_moderation=True

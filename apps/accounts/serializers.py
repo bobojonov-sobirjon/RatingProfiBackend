@@ -1011,11 +1011,38 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         """Parse JSON fields from form-data"""
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
-            json_fields = ['services', 'segments', 'work_cities', 'other_contacts']
+            # Multiple choice fields - vergul bilan ajratilgan stringlar
+            multiple_choice_fields = ['services', 'segments']
+            for field in multiple_choice_fields:
+                if field in data:
+                    value = data.get(field)
+                    if isinstance(value, str):
+                        # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
+                        try:
+                            import json
+                            # QueryDict bo'lsa, mutable copy olish kerak
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = json.loads(value)
+                        except (json.JSONDecodeError, ValueError):
+                            # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
+                            # Masalan: "business,comfort" -> ["business", "comfort"]
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            # Vergul bilan ajratilgan stringlarni listga o'zgartirish
+                            if value.strip():
+                                # Bo'sh bo'lmagan stringlarni listga o'zgartirish
+                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
+                            else:
+                                data[field] = []
+            
+            # JSONField fields - work_cities, other_contacts
+            json_fields = ['work_cities', 'other_contacts']
             for field in json_fields:
                 if field in data:
                     value = data.get(field)
                     if isinstance(value, str):
+                        # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
                             import json
                             # QueryDict bo'lsa, mutable copy olish kerak
@@ -1027,6 +1054,14 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = []
+            
+            # Website field uchun bo'sh stringlarni None ga o'zgartirish
+            if 'website' in data:
+                website_value = data.get('website')
+                if isinstance(website_value, str) and not website_value.strip():
+                    if hasattr(data, '_mutable') and not data._mutable:
+                        data._mutable = True
+                    data['website'] = None
         return super().to_internal_value(data)
     
     def validate_services(self, value):
@@ -1079,10 +1114,7 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         source='get_vat_payment_display',
         read_only=True
     )
-    magazine_cards_display = serializers.CharField(
-        source='get_magazine_cards_display',
-        read_only=True
-    )
+    magazine_cards_display = serializers.SerializerMethodField()
     about_company = serializers.SerializerMethodField()
     terms_of_cooperation = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
@@ -1092,6 +1124,16 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
     @extend_schema_field(str)
     def get_request_name(self, obj):
         return 'RepairQuestionnaire'
+    
+    @extend_schema_field(str)
+    def get_magazine_cards_display(self, obj):
+        """Convert magazine_cards list to display string"""
+        if not obj.magazine_cards:
+            return ""
+        # List bo'lsa, har bir elementni display qilamiz
+        choices_dict = dict(RepairQuestionnaire.MAGAZINE_CARD_CHOICES)
+        displays = [choices_dict.get(card, card) for card in obj.magazine_cards]
+        return ", ".join(displays)
     
     @extend_schema_field(dict)
     def get_rating_count(self, obj):
@@ -1269,10 +1311,13 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         
         # Карточки журнала
         if obj.magazine_cards:
+            # List bo'lsa, har bir elementni display qilamiz
+            choices_dict = dict(RepairQuestionnaire.MAGAZINE_CARD_CHOICES)
+            displays = [choices_dict.get(card, card) for card in obj.magazine_cards]
             terms_data.append({
                 'type': 'magazine_cards',
                 'label': 'Карточки журнала',
-                'value': obj.get_magazine_cards_display(),
+                'value': ", ".join(displays),
                 'raw_value': obj.magazine_cards
             })
         
@@ -1382,11 +1427,12 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         """Parse JSON fields from form-data"""
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
-            json_fields = ['segments', 'representative_cities', 'other_contacts']
+            json_fields = ['segments', 'representative_cities', 'other_contacts', 'magazine_cards']
             for field in json_fields:
                 if field in data:
                     value = data.get(field)
                     if isinstance(value, str):
+                        # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
                             import json
                             # QueryDict bo'lsa, mutable copy olish kerak
@@ -1394,39 +1440,24 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                                 data._mutable = True
                             data[field] = json.loads(value)
                         except (json.JSONDecodeError, ValueError):
-                            # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
+                            # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
+                            # Masalan: "business,comfort" -> ["business", "comfort"]
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = []
-            # magazine_cards - list bo'lsa, birinchi elementni olamiz (CharField uchun)
-            if 'magazine_cards' in data:
-                value = data.get('magazine_cards')
-                if isinstance(value, list) and len(value) > 0:
+                            # Vergul bilan ajratilgan stringlarni listga o'zgartirish
+                            if value.strip():
+                                # Bo'sh bo'lmagan stringlarni listga o'zgartirish
+                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
+                            else:
+                                data[field] = []
+            # Website field uchun bo'sh stringlarni None ga o'zgartirish
+            if 'website' in data:
+                website_value = data.get('website')
+                if isinstance(website_value, str) and not website_value.strip():
                     if hasattr(data, '_mutable') and not data._mutable:
                         data._mutable = True
-                    data['magazine_cards'] = value[0]  # Birinchi elementni olamiz
-                elif isinstance(value, str):
-                    # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
-                    try:
-                        import json
-                        parsed = json.loads(value)
-                        if isinstance(parsed, list) and len(parsed) > 0:
-                            if hasattr(data, '_mutable') and not data._mutable:
-                                data._mutable = True
-                            data['magazine_cards'] = parsed[0]
-                    except (json.JSONDecodeError, ValueError):
-                        pass  # String bo'lib qoladi
+                    data['website'] = None
         return super().to_internal_value(data)
-    
-    def to_representation(self, instance):
-        """Convert CharField magazine_cards to list for Swagger"""
-        data = super().to_representation(instance)
-        if 'magazine_cards' in data and data['magazine_cards']:
-            # CharField qiymatini list ga o'zgartiramiz
-            data['magazine_cards'] = [data['magazine_cards']]
-        elif 'magazine_cards' in data:
-            data['magazine_cards'] = []
-        return data
     
     def validate_segments(self, value):
         """Проверка сегментов"""
@@ -1439,19 +1470,13 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         return value
     
     def validate_magazine_cards(self, value):
-        """Проверка magazine_cards - list bo'lsa, birinchi elementni qaytaramiz"""
-        if isinstance(value, list):
-            if len(value) > 0:
-                valid_cards = [choice[0] for choice in RepairQuestionnaire.MAGAZINE_CARD_CHOICES]
-                if value[0] not in valid_cards:
-                    raise serializers.ValidationError(f"Неверная карточка журнала: {value[0]}")
-                return value[0]  # Birinchi elementni qaytaramiz (CharField uchun)
-            return None
-        elif isinstance(value, str):
-            valid_cards = [choice[0] for choice in RepairQuestionnaire.MAGAZINE_CARD_CHOICES]
-            if value not in valid_cards:
-                raise serializers.ValidationError(f"Неверная карточка журнала: {value}")
-            return value
+        """Проверка magazine_cards - multiple choice"""
+        if not isinstance(value, list):
+            return []
+        valid_cards = [choice[0] for choice in RepairQuestionnaire.MAGAZINE_CARD_CHOICES]
+        for card in value:
+            if card not in valid_cards:
+                raise serializers.ValidationError(f"Неверная карточка журнала: {card}")
         return value
     
     def validate_representative_cities(self, value):
@@ -1484,10 +1509,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         source='get_vat_payment_display',
         read_only=True
     )
-    magazine_cards_display = serializers.CharField(
-        source='get_magazine_cards_display',
-        read_only=True
-    )
+    magazine_cards_display = serializers.SerializerMethodField()
     about_company = serializers.SerializerMethodField()
     terms_of_cooperation = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
@@ -1497,6 +1519,16 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
     @extend_schema_field(str)
     def get_request_name(self, obj):
         return 'SupplierQuestionnaire'
+    
+    @extend_schema_field(str)
+    def get_magazine_cards_display(self, obj):
+        """Convert magazine_cards list to display string"""
+        if not obj.magazine_cards:
+            return ""
+        # List bo'lsa, har bir elementni display qilamiz
+        choices_dict = dict(SupplierQuestionnaire.MAGAZINE_CARD_CHOICES)
+        displays = [choices_dict.get(card, card) for card in obj.magazine_cards]
+        return ", ".join(displays)
     
     @extend_schema_field(dict)
     def get_rating_count(self, obj):
@@ -1674,10 +1706,13 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         
         # Карточки журнала
         if obj.magazine_cards:
+            # List bo'lsa, har bir elementni display qilamiz
+            choices_dict = dict(SupplierQuestionnaire.MAGAZINE_CARD_CHOICES)
+            displays = [choices_dict.get(card, card) for card in obj.magazine_cards]
             terms_data.append({
                 'type': 'magazine_cards',
                 'label': 'Карточки журнала',
-                'value': obj.get_magazine_cards_display(),
+                'value': ", ".join(displays),
                 'raw_value': obj.magazine_cards
             })
         
@@ -1785,11 +1820,38 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         """Parse JSON fields from form-data"""
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
-            json_fields = ['segments', 'representative_cities', 'other_contacts']
+            # Multiple choice fields - vergul bilan ajratilgan stringlar
+            multiple_choice_fields = ['segments', 'magazine_cards']
+            for field in multiple_choice_fields:
+                if field in data:
+                    value = data.get(field)
+                    if isinstance(value, str):
+                        # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
+                        try:
+                            import json
+                            # QueryDict bo'lsa, mutable copy olish kerak
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = json.loads(value)
+                        except (json.JSONDecodeError, ValueError):
+                            # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
+                            # Masalan: "business,comfort" -> ["business", "comfort"]
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            # Vergul bilan ajratilgan stringlarni listga o'zgartirish
+                            if value.strip():
+                                # Bo'sh bo'lmagan stringlarni listga o'zgartirish
+                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
+                            else:
+                                data[field] = []
+            
+            # JSONField fields - representative_cities, other_contacts
+            json_fields = ['representative_cities', 'other_contacts']
             for field in json_fields:
                 if field in data:
                     value = data.get(field)
                     if isinstance(value, str):
+                        # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
                             import json
                             # QueryDict bo'lsa, mutable copy olish kerak
@@ -1801,35 +1863,15 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = []
-            # magazine_cards - list bo'lsa, birinchi elementni olamiz (CharField uchun)
-            if 'magazine_cards' in data:
-                value = data.get('magazine_cards')
-                if isinstance(value, list) and len(value) > 0:
+            
+            # Website field uchun bo'sh stringlarni None ga o'zgartirish
+            if 'website' in data:
+                website_value = data.get('website')
+                if isinstance(website_value, str) and not website_value.strip():
                     if hasattr(data, '_mutable') and not data._mutable:
                         data._mutable = True
-                    data['magazine_cards'] = value[0]  # Birinchi elementni olamiz
-                elif isinstance(value, str):
-                    # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
-                    try:
-                        import json
-                        parsed = json.loads(value)
-                        if isinstance(parsed, list) and len(parsed) > 0:
-                            if hasattr(data, '_mutable') and not data._mutable:
-                                data._mutable = True
-                            data['magazine_cards'] = parsed[0]
-                    except (json.JSONDecodeError, ValueError):
-                        pass  # String bo'lib qoladi
+                    data['website'] = None
         return super().to_internal_value(data)
-    
-    def to_representation(self, instance):
-        """Convert CharField magazine_cards to list for Swagger"""
-        data = super().to_representation(instance)
-        if 'magazine_cards' in data and data['magazine_cards']:
-            # CharField qiymatini list ga o'zgartiramiz
-            data['magazine_cards'] = [data['magazine_cards']]
-        elif 'magazine_cards' in data:
-            data['magazine_cards'] = []
-        return data
     
     def validate_segments(self, value):
         """Проверка сегментов"""
@@ -1842,19 +1884,13 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         return value
     
     def validate_magazine_cards(self, value):
-        """Проверка magazine_cards - list bo'lsa, birinchi elementni qaytaramiz"""
-        if isinstance(value, list):
-            if len(value) > 0:
-                valid_cards = [choice[0] for choice in SupplierQuestionnaire.MAGAZINE_CARD_CHOICES]
-                if value[0] not in valid_cards:
-                    raise serializers.ValidationError(f"Неверная карточка журнала: {value[0]}")
-                return value[0]  # Birinchi elementni qaytaramiz (CharField uchun)
-            return None
-        elif isinstance(value, str):
-            valid_cards = [choice[0] for choice in SupplierQuestionnaire.MAGAZINE_CARD_CHOICES]
-            if value not in valid_cards:
-                raise serializers.ValidationError(f"Неверная карточка журнала: {value}")
-            return value
+        """Проверка magazine_cards - multiple choice"""
+        if not isinstance(value, list):
+            return []
+        valid_cards = [choice[0] for choice in SupplierQuestionnaire.MAGAZINE_CARD_CHOICES]
+        for card in value:
+            if card not in valid_cards:
+                raise serializers.ValidationError(f"Неверная карточка журнала: {card}")
         return value
     
     def validate_representative_cities(self, value):
@@ -2047,12 +2083,38 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         # QueryDict yoki dict bo'lishi mumkin
         if hasattr(data, 'get'):
-            # QueryDict yoki dict
-            json_fields = ['segments', 'representative_cities', 'other_contacts']
+            # Multiple choice fields - vergul bilan ajratilgan stringlar
+            multiple_choice_fields = ['segments']
+            for field in multiple_choice_fields:
+                if field in data:
+                    value = data.get(field)
+                    if isinstance(value, str):
+                        # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
+                        try:
+                            import json
+                            # QueryDict bo'lsa, mutable copy olish kerak
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            data[field] = json.loads(value)
+                        except (json.JSONDecodeError, ValueError):
+                            # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
+                            # Masalan: "business,comfort" -> ["business", "comfort"]
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            # Vergul bilan ajratilgan stringlarni listga o'zgartirish
+                            if value.strip():
+                                # Bo'sh bo'lmagan stringlarni listga o'zgartirish
+                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
+                            else:
+                                data[field] = []
+            
+            # JSONField fields - representative_cities, other_contacts
+            json_fields = ['representative_cities', 'other_contacts']
             for field in json_fields:
                 if field in data:
                     value = data.get(field)
                     if isinstance(value, str):
+                        # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
                             import json
                             # QueryDict bo'lsa, mutable copy olish kerak
@@ -2064,6 +2126,14 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = []
+            
+            # Website field uchun bo'sh stringlarni None ga o'zgartirish
+            if 'website' in data:
+                website_value = data.get('website')
+                if isinstance(website_value, str) and not website_value.strip():
+                    if hasattr(data, '_mutable') and not data._mutable:
+                        data._mutable = True
+                    data['website'] = None
         return super().to_internal_value(data)
     
     def validate_segments(self, value):
