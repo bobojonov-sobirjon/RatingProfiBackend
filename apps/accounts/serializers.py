@@ -1147,6 +1147,17 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                     if hasattr(data, '_mutable') and not data._mutable:
                         data._mutable = True
                     data['website'] = None
+            
+            # File fields (photo, company_logo, legal_entity_card) uchun bo'sh stringlarni None ga o'zgartirish
+            file_fields = ['photo', 'company_logo', 'legal_entity_card']
+            for field in file_fields:
+                if field in data:
+                    file_value = data.get(field)
+                    # Agar bo'sh string yoki 'null' string bo'lsa, None ga o'zgartirish
+                    if isinstance(file_value, str) and (not file_value.strip() or file_value.strip().lower() == 'null'):
+                        if hasattr(data, '_mutable') and not data._mutable:
+                            data._mutable = True
+                        data[field] = None
         return super().to_internal_value(data)
     
     def validate_services(self, value):
@@ -1643,6 +1654,17 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                     if hasattr(data, '_mutable') and not data._mutable:
                         data._mutable = True
                     data['website'] = None
+            
+            # File fields (photo, company_logo, legal_entity_card) uchun bo'sh stringlarni None ga o'zgartirish
+            file_fields = ['photo', 'company_logo', 'legal_entity_card']
+            for field in file_fields:
+                if field in data:
+                    file_value = data.get(field)
+                    # Agar bo'sh string yoki 'null' string bo'lsa, None ga o'zgartirish
+                    if isinstance(file_value, str) and (not file_value.strip() or file_value.strip().lower() == 'null'):
+                        if hasattr(data, '_mutable') and not data._mutable:
+                            data._mutable = True
+                        data[field] = None
         
         return super().to_internal_value(data)
     
@@ -2139,6 +2161,17 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                     if hasattr(data, '_mutable') and not data._mutable:
                         data._mutable = True
                     data['website'] = None
+            
+            # File fields (photo, company_logo, legal_entity_card) uchun bo'sh stringlarni None ga o'zgartirish
+            file_fields = ['photo', 'company_logo', 'legal_entity_card']
+            for field in file_fields:
+                if field in data:
+                    file_value = data.get(field)
+                    # Agar bo'sh string yoki 'null' string bo'lsa, None ga o'zgartirish
+                    if isinstance(file_value, str) and (not file_value.strip() or file_value.strip().lower() == 'null'):
+                        if hasattr(data, '_mutable') and not data._mutable:
+                            data._mutable = True
+                        data[field] = None
         return super().to_internal_value(data)
     
     def validate_segments(self, value):
@@ -2483,6 +2516,17 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                     if hasattr(data, '_mutable') and not data._mutable:
                         data._mutable = True
                     data['website'] = None
+            
+            # File fields (photo, company_logo, legal_entity_card) uchun bo'sh stringlarni None ga o'zgartirish
+            file_fields = ['photo', 'company_logo', 'legal_entity_card']
+            for field in file_fields:
+                if field in data:
+                    file_value = data.get(field)
+                    # Agar bo'sh string yoki 'null' string bo'lsa, None ga o'zgartirish
+                    if isinstance(file_value, str) and (not file_value.strip() or file_value.strip().lower() == 'null'):
+                        if hasattr(data, '_mutable') and not data._mutable:
+                            data._mutable = True
+                        data[field] = None
         return super().to_internal_value(data)
     
     def validate_segments(self, value):
