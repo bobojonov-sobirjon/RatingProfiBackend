@@ -711,6 +711,9 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
     
     @extend_schema_field(str)
     def get_request_name(self, obj):
+        # group ga qarab to'g'ri request_name qaytaramiz
+        if obj.group == 'media':
+            return 'MediaQuestionnaire'
         return 'DesignerQuestionnaire'
     
     @extend_schema_field(dict)
