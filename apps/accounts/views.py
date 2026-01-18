@@ -1853,9 +1853,9 @@ class DesignerQuestionnaireDetailView(views.APIView):
             # Staff userlar uchun barcha, oddiy userlar uchun faqat is_moderation=True
             is_staff = request and request.user.is_authenticated and request.user.is_staff
             if is_staff:
-                return DesignerQuestionnaire.objects.get(pk=pk)
+                return DesignerQuestionnaire.objects.filter(is_deleted=False).get(pk=pk)
             else:
-                return DesignerQuestionnaire.objects.filter(is_moderation=True).get(pk=pk)
+                return DesignerQuestionnaire.objects.filter(is_moderation=True, is_deleted=False).get(pk=pk)
         except DesignerQuestionnaire.DoesNotExist:
             raise NotFound("Анкета не найдена")
     
