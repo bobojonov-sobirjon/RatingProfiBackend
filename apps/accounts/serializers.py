@@ -1026,7 +1026,13 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                             # QueryDict bo'lsa, mutable copy olish kerak
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = json.loads(value)
+                            parsed = json.loads(value)
+                            # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
+                            if isinstance(parsed, list):
+                                data[field] = parsed
+                            else:
+                                # Agar list bo'lmasa, listga o'zgartiramiz
+                                data[field] = [parsed] if parsed else []
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
                             # Masalan: "business,comfort" -> ["business", "comfort"]
@@ -2148,7 +2154,13 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                             # QueryDict bo'lsa, mutable copy olish kerak
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = json.loads(value)
+                            parsed = json.loads(value)
+                            # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
+                            if isinstance(parsed, list):
+                                data[field] = parsed
+                            else:
+                                # Agar list bo'lmasa, listga o'zgartiramiz
+                                data[field] = [parsed] if parsed else []
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
                             # Masalan: "business,comfort" -> ["business", "comfort"]
