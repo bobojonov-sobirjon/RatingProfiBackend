@@ -1016,6 +1016,9 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             for field in multiple_choice_fields:
                 if field in data:
                     value = data.get(field)
+                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, list):
+                        continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
@@ -1041,6 +1044,9 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             for field in json_fields:
                 if field in data:
                     value = data.get(field)
+                    # Agar allaqachon list yoki dict bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, (list, dict)):
+                        continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
@@ -1432,6 +1438,9 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             for field in multiple_choice_fields:
                 if field in data:
                     value = data.get(field)
+                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, list):
+                        continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
@@ -1463,6 +1472,9 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             for field in json_fields:
                 if field in data:
                     value = data.get(field)
+                    # Agar allaqachon list yoki dict bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, (list, dict)):
+                        continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
@@ -1851,6 +1863,9 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             for field in multiple_choice_fields:
                 if field in data:
                     value = data.get(field)
+                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, list):
+                        continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
@@ -1858,7 +1873,13 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                             # QueryDict bo'lsa, mutable copy olish kerak
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = json.loads(value)
+                            parsed = json.loads(value)
+                            # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
+                            if isinstance(parsed, list):
+                                data[field] = parsed
+                            else:
+                                # Agar list bo'lmasa, listga o'zgartiramiz
+                                data[field] = [parsed] if parsed else []
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
                             # Masalan: "business,comfort" -> ["business", "comfort"]
@@ -1876,6 +1897,9 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             for field in json_fields:
                 if field in data:
                     value = data.get(field)
+                    # Agar allaqachon list yoki dict bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, (list, dict)):
+                        continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
@@ -2114,6 +2138,9 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
             for field in multiple_choice_fields:
                 if field in data:
                     value = data.get(field)
+                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, list):
+                        continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
@@ -2139,6 +2166,9 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
             for field in json_fields:
                 if field in data:
                     value = data.get(field)
+                    # Agar allaqachon list yoki dict bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, (list, dict)):
+                        continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
