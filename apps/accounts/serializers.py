@@ -941,8 +941,19 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
     )
     
     # JSONField fields - work_cities, other_contacts
-    work_cities = serializers.JSONField(required=False, allow_null=True)
-    other_contacts = serializers.JSONField(required=False, allow_null=True)
+    # ListField ishlatamiz, chunki JSONField form-data bilan muammo qilmoqda
+    work_cities = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Города работы (JSON array). Пример: ['Ташкент', 'Самарканд']"
+    )
+    other_contacts = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Другие контакты (JSON array). Пример: ['contact1', 'contact2']"
+    )
     
     class Meta:
         model = DesignerQuestionnaire
@@ -969,6 +980,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             'pinterest',
             'instagram',
             'website',
+            'work_cities',
             'other_contacts',
             'service_packages_description',
             'vat_payment',
@@ -1074,13 +1086,13 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                                 else:
                                     data[field] = []
             
-            # JSONField fields - work_cities, other_contacts
-            json_fields = ['work_cities', 'other_contacts']
-            for field in json_fields:
+            # ListField fields - work_cities, other_contacts (endi ListField ishlatamiz)
+            list_fields = ['work_cities', 'other_contacts']
+            for field in list_fields:
                 if field in data:
                     value = data.get(field)
-                    # Agar allaqachon list yoki dict bo'lsa, hech narsa qilmaymiz
-                    if isinstance(value, (list, dict)):
+                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, list):
                         continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
@@ -1090,18 +1102,40 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             parsed = json.loads(value)
-                            # JSONField uchun to'g'ridan-to'g'ri o'rnatamiz (list yoki dict)
-                            data[field] = parsed
+                            # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
+                            if isinstance(parsed, list):
+                                parsed_list = [str(item) for item in parsed if item is not None]
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
+                            else:
+                                # Agar list bo'lmasa, listga o'zgartiramiz
+                                parsed_list = [str(parsed)] if parsed else []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = []
+                            if hasattr(data, 'setlist'):
+                                data.setlist(field, [])
+                            else:
+                                data[field] = []
                     elif value is None or value == '':
                         # Agar None yoki bo'sh string bo'lsa, bo'sh list qaytaramiz
                         if hasattr(data, '_mutable') and not data._mutable:
                             data._mutable = True
-                        data[field] = []
+                        if hasattr(data, 'setlist'):
+                            data.setlist(field, [])
+                        else:
+                            data[field] = []
             
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
@@ -1400,8 +1434,19 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
     )
     
     # JSONField fields - representative_cities, other_contacts
-    representative_cities = serializers.JSONField(required=False, allow_null=True)
-    other_contacts = serializers.JSONField(required=False, allow_null=True)
+    # ListField ishlatamiz, chunki JSONField form-data bilan muammo qilmoqda
+    representative_cities = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Города представительств (JSON array). Пример: ['Ташкент', 'Самарканд']"
+    )
+    other_contacts = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Другие контакты (JSON array). Пример: ['contact1', 'contact2']"
+    )
     
     class Meta:
         model = RepairQuestionnaire
@@ -1538,13 +1583,13 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                                 else:
                                     data[field] = []
             
-            # JSONField fields - representative_cities, other_contacts
-            json_fields = ['representative_cities', 'other_contacts']
-            for field in json_fields:
+            # ListField fields - representative_cities, other_contacts (endi ListField ishlatamiz)
+            list_fields = ['representative_cities', 'other_contacts']
+            for field in list_fields:
                 if field in data:
                     value = data.get(field)
-                    # Agar allaqachon list yoki dict bo'lsa, hech narsa qilmaymiz
-                    if isinstance(value, (list, dict)):
+                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, list):
                         continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
@@ -1554,18 +1599,40 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             parsed = json.loads(value)
-                            # JSONField uchun to'g'ridan-to'g'ri o'rnatamiz (list yoki dict)
-                            data[field] = parsed
+                            # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
+                            if isinstance(parsed, list):
+                                parsed_list = [str(item) for item in parsed if item is not None]
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
+                            else:
+                                # Agar list bo'lmasa, listga o'zgartiramiz
+                                parsed_list = [str(parsed)] if parsed else []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = []
+                            if hasattr(data, 'setlist'):
+                                data.setlist(field, [])
+                            else:
+                                data[field] = []
                     elif value is None or value == '':
                         # Agar None yoki bo'sh string bo'lsa, bo'sh list qaytaramiz
                         if hasattr(data, '_mutable') and not data._mutable:
                             data._mutable = True
-                        data[field] = []
+                        if hasattr(data, 'setlist'):
+                            data.setlist(field, [])
+                        else:
+                            data[field] = []
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
                 website_value = data.get('website')
@@ -1864,8 +1931,19 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
     )
     
     # JSONField fields - representative_cities, other_contacts
-    representative_cities = serializers.JSONField(required=False, allow_null=True)
-    other_contacts = serializers.JSONField(required=False, allow_null=True)
+    # ListField ishlatamiz, chunki JSONField form-data bilan muammo qilmoqda
+    representative_cities = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Города представительств (JSON array). Пример: ['Ташкент', 'Самарканд']"
+    )
+    other_contacts = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Другие контакты (JSON array). Пример: ['contact1', 'contact2']"
+    )
     
     class Meta:
         model = SupplierQuestionnaire
@@ -2000,13 +2078,13 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                                 else:
                                     data[field] = []
             
-            # JSONField fields - representative_cities, other_contacts
-            json_fields = ['representative_cities', 'other_contacts']
-            for field in json_fields:
+            # ListField fields - representative_cities, other_contacts (endi ListField ishlatamiz)
+            list_fields = ['representative_cities', 'other_contacts']
+            for field in list_fields:
                 if field in data:
                     value = data.get(field)
-                    # Agar allaqachon list yoki dict bo'lsa, hech narsa qilmaymiz
-                    if isinstance(value, (list, dict)):
+                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, list):
                         continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
@@ -2016,18 +2094,40 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             parsed = json.loads(value)
-                            # JSONField uchun to'g'ridan-to'g'ri o'rnatamiz (list yoki dict)
-                            data[field] = parsed
+                            # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
+                            if isinstance(parsed, list):
+                                parsed_list = [str(item) for item in parsed if item is not None]
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
+                            else:
+                                # Agar list bo'lmasa, listga o'zgartiramiz
+                                parsed_list = [str(parsed)] if parsed else []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = []
+                            if hasattr(data, 'setlist'):
+                                data.setlist(field, [])
+                            else:
+                                data[field] = []
                     elif value is None or value == '':
                         # Agar None yoki bo'sh string bo'lsa, bo'sh list qaytaramiz
                         if hasattr(data, '_mutable') and not data._mutable:
                             data._mutable = True
-                        data[field] = []
+                        if hasattr(data, 'setlist'):
+                            data.setlist(field, [])
+                        else:
+                            data[field] = []
             
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
@@ -2184,8 +2284,19 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
     )
     
     # JSONField fields - representative_cities, other_contacts
-    representative_cities = serializers.JSONField(required=False, allow_null=True)
-    other_contacts = serializers.JSONField(required=False, allow_null=True)
+    # ListField ishlatamiz, chunki JSONField form-data bilan muammo qilmoqda
+    representative_cities = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Города представительств (JSON array). Пример: ['Ташкент', 'Самарканд']"
+    )
+    other_contacts = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Другие контакты (JSON array). Пример: ['contact1', 'contact2']"
+    )
     
     class Meta:
         model = MediaQuestionnaire
@@ -2311,13 +2422,13 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                                 else:
                                     data[field] = []
             
-            # JSONField fields - representative_cities, other_contacts
-            json_fields = ['representative_cities', 'other_contacts']
-            for field in json_fields:
+            # ListField fields - representative_cities, other_contacts (endi ListField ishlatamiz)
+            list_fields = ['representative_cities', 'other_contacts']
+            for field in list_fields:
                 if field in data:
                     value = data.get(field)
-                    # Agar allaqachon list yoki dict bo'lsa, hech narsa qilmaymiz
-                    if isinstance(value, (list, dict)):
+                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    if isinstance(value, list):
                         continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
@@ -2327,18 +2438,40 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             parsed = json.loads(value)
-                            # JSONField uchun to'g'ridan-to'g'ri o'rnatamiz (list yoki dict)
-                            data[field] = parsed
+                            # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
+                            if isinstance(parsed, list):
+                                parsed_list = [str(item) for item in parsed if item is not None]
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
+                            else:
+                                # Agar list bo'lmasa, listga o'zgartiramiz
+                                parsed_list = [str(parsed)] if parsed else []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = []
+                            if hasattr(data, 'setlist'):
+                                data.setlist(field, [])
+                            else:
+                                data[field] = []
                     elif value is None or value == '':
                         # Agar None yoki bo'sh string bo'lsa, bo'sh list qaytaramiz
                         if hasattr(data, '_mutable') and not data._mutable:
                             data._mutable = True
-                        data[field] = []
+                        if hasattr(data, 'setlist'):
+                            data.setlist(field, [])
+                        else:
+                            data[field] = []
             
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
