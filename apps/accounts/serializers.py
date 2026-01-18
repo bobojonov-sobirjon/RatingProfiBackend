@@ -927,14 +927,14 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
     
     # Multiple choice fields for Swagger
     services = serializers.ListField(
-        child=serializers.ChoiceField(choices=DesignerQuestionnaire.SERVICES_CHOICES),
+        child=serializers.ChoiceField(choices=DesignerQuestionnaire.SERVICES_CHOICES, allow_blank=False),
         required=False,
         allow_empty=True,
         help_text="Список услуг (multiple choice). Пример: ['author_supervision', 'architecture']"
     )
     
     segments = serializers.ListField(
-        child=serializers.ChoiceField(choices=DesignerQuestionnaire.SEGMENT_CHOICES),
+        child=serializers.ChoiceField(choices=DesignerQuestionnaire.SEGMENT_CHOICES, allow_blank=False),
         required=False,
         allow_empty=True,
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
@@ -1338,14 +1338,14 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
     
     # Multiple choice fields for Swagger
     segments = serializers.ListField(
-        child=serializers.ChoiceField(choices=RepairQuestionnaire.SEGMENT_CHOICES),
+        child=serializers.ChoiceField(choices=RepairQuestionnaire.SEGMENT_CHOICES, allow_blank=False),
         required=False,
         allow_empty=True,
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
     
     magazine_cards = serializers.ListField(
-        child=serializers.ChoiceField(choices=RepairQuestionnaire.MAGAZINE_CARD_CHOICES),
+        child=serializers.ChoiceField(choices=RepairQuestionnaire.MAGAZINE_CARD_CHOICES, allow_blank=False),
         required=False,
         allow_empty=True,
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
@@ -1427,7 +1427,39 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         """Parse JSON fields from form-data"""
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
-            json_fields = ['segments', 'representative_cities', 'other_contacts', 'magazine_cards']
+            # Multiple choice fields - segments, magazine_cards
+            multiple_choice_fields = ['segments', 'magazine_cards']
+            for field in multiple_choice_fields:
+                if field in data:
+                    value = data.get(field)
+                    if isinstance(value, str):
+                        # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
+                        try:
+                            import json
+                            # QueryDict bo'lsa, mutable copy olish kerak
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            parsed = json.loads(value)
+                            # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
+                            if isinstance(parsed, list):
+                                data[field] = parsed
+                            else:
+                                # Agar list bo'lmasa, listga o'zgartiramiz
+                                data[field] = [parsed] if parsed else []
+                        except (json.JSONDecodeError, ValueError):
+                            # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
+                            # Masalan: "business,comfort" -> ["business", "comfort"]
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            # Vergul bilan ajratilgan stringlarni listga o'zgartirish
+                            if value.strip():
+                                # Bo'sh bo'lmagan stringlarni listga o'zgartirish
+                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
+                            else:
+                                data[field] = []
+            
+            # JSONField fields - representative_cities, other_contacts
+            json_fields = ['representative_cities', 'other_contacts']
             for field in json_fields:
                 if field in data:
                     value = data.get(field)
@@ -1440,16 +1472,10 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                                 data._mutable = True
                             data[field] = json.loads(value)
                         except (json.JSONDecodeError, ValueError):
-                            # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
-                            # Masalan: "business,comfort" -> ["business", "comfort"]
+                            # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            # Vergul bilan ajratilgan stringlarni listga o'zgartirish
-                            if value.strip():
-                                # Bo'sh bo'lmagan stringlarni listga o'zgartirish
-                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
-                            else:
-                                data[field] = []
+                            data[field] = []
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
                 website_value = data.get('website')
@@ -1733,14 +1759,14 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
     
     # Multiple choice fields for Swagger
     segments = serializers.ListField(
-        child=serializers.ChoiceField(choices=SupplierQuestionnaire.SEGMENT_CHOICES),
+        child=serializers.ChoiceField(choices=SupplierQuestionnaire.SEGMENT_CHOICES, allow_blank=False),
         required=False,
         allow_empty=True,
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
     
     magazine_cards = serializers.ListField(
-        child=serializers.ChoiceField(choices=SupplierQuestionnaire.MAGAZINE_CARD_CHOICES),
+        child=serializers.ChoiceField(choices=SupplierQuestionnaire.MAGAZINE_CARD_CHOICES, allow_blank=False),
         required=False,
         allow_empty=True,
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
@@ -2012,7 +2038,7 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
     
     # Multiple choice fields for Swagger
     segments = serializers.ListField(
-        child=serializers.ChoiceField(choices=MediaQuestionnaire.SEGMENT_CHOICES),
+        child=serializers.ChoiceField(choices=MediaQuestionnaire.SEGMENT_CHOICES, allow_blank=False),
         required=False,
         allow_empty=True,
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
