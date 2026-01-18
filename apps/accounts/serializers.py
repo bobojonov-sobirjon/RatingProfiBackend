@@ -940,6 +940,10 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
     
+    # JSONField fields - work_cities, other_contacts
+    work_cities = serializers.JSONField(required=False, allow_null=True)
+    other_contacts = serializers.JSONField(required=False, allow_null=True)
+    
     class Meta:
         model = DesignerQuestionnaire
         fields = [
@@ -1085,12 +1089,19 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                             # QueryDict bo'lsa, mutable copy olish kerak
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = json.loads(value)
+                            parsed = json.loads(value)
+                            # JSONField uchun to'g'ridan-to'g'ri o'rnatamiz (list yoki dict)
+                            data[field] = parsed
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = []
+                    elif value is None or value == '':
+                        # Agar None yoki bo'sh string bo'lsa, bo'sh list qaytaramiz
+                        if hasattr(data, '_mutable') and not data._mutable:
+                            data._mutable = True
+                        data[field] = []
             
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
@@ -1388,6 +1399,9 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
     )
     
+    # JSONField fields - representative_cities, other_contacts
+    representative_cities = serializers.JSONField(required=False, allow_null=True)
+    other_contacts = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = RepairQuestionnaire
@@ -1539,12 +1553,19 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                             # QueryDict bo'lsa, mutable copy olish kerak
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = json.loads(value)
+                            parsed = json.loads(value)
+                            # JSONField uchun to'g'ridan-to'g'ri o'rnatamiz (list yoki dict)
+                            data[field] = parsed
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = []
+                    elif value is None or value == '':
+                        # Agar None yoki bo'sh string bo'lsa, bo'sh list qaytaramiz
+                        if hasattr(data, '_mutable') and not data._mutable:
+                            data._mutable = True
+                        data[field] = []
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
                 website_value = data.get('website')
@@ -1842,6 +1863,10 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
     )
     
+    # JSONField fields - representative_cities, other_contacts
+    representative_cities = serializers.JSONField(required=False, allow_null=True)
+    other_contacts = serializers.JSONField(required=False, allow_null=True)
+    
     class Meta:
         model = SupplierQuestionnaire
         fields = [
@@ -1990,12 +2015,19 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                             # QueryDict bo'lsa, mutable copy olish kerak
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = json.loads(value)
+                            parsed = json.loads(value)
+                            # JSONField uchun to'g'ridan-to'g'ri o'rnatamiz (list yoki dict)
+                            data[field] = parsed
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = []
+                    elif value is None or value == '':
+                        # Agar None yoki bo'sh string bo'lsa, bo'sh list qaytaramiz
+                        if hasattr(data, '_mutable') and not data._mutable:
+                            data._mutable = True
+                        data[field] = []
             
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
@@ -2151,6 +2183,10 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
     
+    # JSONField fields - representative_cities, other_contacts
+    representative_cities = serializers.JSONField(required=False, allow_null=True)
+    other_contacts = serializers.JSONField(required=False, allow_null=True)
+    
     class Meta:
         model = MediaQuestionnaire
         fields = [
@@ -2290,12 +2326,19 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                             # QueryDict bo'lsa, mutable copy olish kerak
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
-                            data[field] = json.loads(value)
+                            parsed = json.loads(value)
+                            # JSONField uchun to'g'ridan-to'g'ri o'rnatamiz (list yoki dict)
+                            data[field] = parsed
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, bo'sh list qaytaramiz
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = []
+                    elif value is None or value == '':
+                        # Agar None yoki bo'sh string bo'lsa, bo'sh list qaytaramiz
+                        if hasattr(data, '_mutable') and not data._mutable:
+                            data._mutable = True
+                        data[field] = []
             
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
