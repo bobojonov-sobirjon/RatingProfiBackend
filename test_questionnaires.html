@@ -506,78 +506,112 @@
     </div>
     
     <script>
-        const baseUrl = () => document.getElementById('baseUrl').value || 'http://127.0.0.1:8000';
+        /* ===============================
+           FORM DATA HELPER
+        ================================ */
+        function objectToFormData(obj) {
+            const formData = new FormData();
+        
+            Object.keys(obj).forEach(key => {
+                const value = obj[key];
+        
+                // Agar value null yoki undefined bo'lsa, o'tkazib yuboramiz
+                if (value === null || value === undefined) {
+                    return;
+                }
+        
+                // Agar value array bo'lsa, JSON string sifatida yuboramiz
+                if (Array.isArray(value)) {
+                    if (value.length === 0) {
+                        // Bo'sh array bo'lsa, bo'sh JSON array sifatida yuboramiz
+                        formData.append(key, JSON.stringify([]));
+                    } else {
+                        // Array elementlarini JSON string sifatida yuboramiz
+                        formData.append(key, JSON.stringify(value));
+                    }
+                }
+                // Agar value boolean bo'lsa, string ga o'zgartirish
+                else if (typeof value === 'boolean') {
+                    formData.append(key, value.toString());
+                }
+                // Agar value bo'sh string bo'lsa, bo'sh string sifatida yuboramiz
+                else if (value === '') {
+                    formData.append(key, '');
+                }
+                // Boshqa hollarda oddiy string sifatida yuboramiz
+                else {
+                    formData.append(key, value);
+                }
+            });
+        
+            return formData;
+        }
+        
+        /* ===============================
+           COMMON HELPERS
+        ================================ */
+        const baseUrl = () => document.getElementById('baseUrl').value;
         const getToken = () => {
             let token = document.getElementById('authToken').value.trim();
-            if (token && !token.startsWith('Bearer ')) {
-                token = 'Bearer ' + token;
-            }
-            return token;
+            return token.startsWith('Bearer ') ? token : 'Bearer ' + token;
         };
         
-        const getSelectedCheckboxes = (fieldName, sectionId) => {
-            const container = document.querySelector(`#${sectionId} .checkbox-group[data-field="${fieldName}"]`);
-            if (!container) return [];
-            const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
-            return Array.from(checkboxes).map(cb => cb.value);
+        const getSelectedCheckboxes = (field, sectionId) => {
+            return Array.from(
+                document.querySelectorAll(`#${sectionId} .checkbox-group[data-field="${field}"] input:checked`)
+            ).map(cb => cb.value);
         };
         
-        const showResponse = (elementId, success, data) => {
-            const element = document.getElementById(elementId);
-            element.className = `response ${success ? 'success' : 'error'}`;
-            element.style.display = 'block';
-            element.innerHTML = `
-                <strong>${success ? '✅ Success' : '❌ Error'}</strong>
-                <pre>${JSON.stringify(data, null, 2)}</pre>
-            `;
+        const showResponse = (id, ok, data) => {
+            const el = document.getElementById(id);
+            el.style.display = 'block';
+            el.style.background = ok ? '#d4edda' : '#f8d7da';
+            el.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
         };
         
+        /* ===============================
+           DESIGNER
+        ================================ */
         async function testDesigner() {
-            const token = getToken();
-            const url = `${baseUrl()}/api/v1/accounts/questionnaires/`;
-            
-            const services = getSelectedCheckboxes('services', 'designerSection');
-            const segments = getSelectedCheckboxes('segments', 'designerSection');
-            
             const data = {
-                group: document.getElementById('designerGroup').value,
-                full_name: document.getElementById('designerFullName').value,
-                full_name_en: document.getElementById('designerFullNameEn').value,
-                phone: document.getElementById('designerPhone').value,
-                birth_date: document.getElementById('designerBirthDate').value,
-                email: document.getElementById('designerEmail').value,
-                city: document.getElementById('designerCity').value,
-                services: services,
-                work_type: document.getElementById('designerWorkType').value,
-                work_type_details: document.getElementById('designerWorkTypeDetails').value,
-                welcome_message: document.getElementById('designerWelcomeMessage').value,
-                work_cities: [""],
-                segments: segments,
-                unique_trade_proposal: document.getElementById('designerUniqueTradeProposal').value,
-                vk: "",
-                telegram_channel: "",
-                pinterest: "",
-                instagram: "",
-                website: "",
-                other_contacts: [""],
-                service_packages_description: document.getElementById('designerServicePackagesDescription').value,
-                vat_payment: document.getElementById('designerVatPayment').value,
-                supplier_contractor_recommendation_terms: document.getElementById('designerSupplierContractorTerms').value,
-                additional_info: document.getElementById('designerAdditionalInfo').value,
-                data_processing_consent: document.getElementById('designerConsent').checked,
+                group: designerGroup.value,
+                full_name: designerFullName.value,
+                full_name_en: designerFullNameEn.value,
+                phone: designerPhone.value,
+                birth_date: designerBirthDate.value,
+                email: designerEmail.value,
+                city: designerCity.value,
+                services: getSelectedCheckboxes('services', 'designerSection'),
+                segments: getSelectedCheckboxes('segments', 'designerSection'),
+                work_type: designerWorkType.value,
+                work_type_details: designerWorkTypeDetails.value,
+                welcome_message: designerWelcomeMessage.value,
+                work_cities: [],
+                unique_trade_proposal: designerUniqueTradeProposal.value,
+                vk: '',
+                telegram_channel: '',
+                pinterest: '',
+                instagram: '',
+                website: '',
+                other_contacts: [],
+                service_packages_description: designerServicePackagesDescription.value,
+                vat_payment: designerVatPayment.value,
+                supplier_contractor_recommendation_terms: designerSupplierContractorTerms.value,
+                additional_info: designerAdditionalInfo.value,
+                data_processing_consent: designerConsent.checked,
                 photo: null
             };
-            
+        
             try {
-                const response = await fetch(url, {
+                const response = await fetch(`${baseUrl()}/api/v1/accounts/questionnaires/`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token
+                        'Authorization': getToken(),
+                        'Accept': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: objectToFormData(data)
                 });
-                
+            
                 const result = await response.json();
                 showResponse('designerResponse', response.ok, result);
             } catch (error) {
@@ -585,54 +619,51 @@
             }
         }
         
+        /* ===============================
+           REPAIR
+        ================================ */
         async function testRepair() {
-            const token = getToken();
-            const url = `${baseUrl()}/api/v1/accounts/repair-questionnaires/`;
-            
-            const segments = getSelectedCheckboxes('segments', 'repairSection');
-            const magazineCards = getSelectedCheckboxes('magazine_cards', 'repairSection');
-            
             const data = {
-                group: document.getElementById('repairGroup').value,
-                brand_name: document.getElementById('repairBrandName').value,
-                phone: document.getElementById('repairPhone').value,
-                email: document.getElementById('repairEmail').value,
-                responsible_person: document.getElementById('repairResponsible').value,
-                representative_cities: [""],
-                business_form: document.getElementById('repairBusinessForm').value,
-                business_form_details: document.getElementById('repairBusinessFormDetails').value,
-                work_list: document.getElementById('repairWorkList').value,
-                welcome_message: document.getElementById('repairWelcomeMessage').value,
-                cooperation_terms: document.getElementById('repairCooperationTerms').value,
-                project_timelines: document.getElementById('repairProjectTimelines').value,
-                segments: segments,
-                vk: "",
-                telegram_channel: "",
-                pinterest: "",
-                instagram: "",
-                website: "",
-                other_contacts: [""],
-                work_format: document.getElementById('repairWorkFormat').value,
-                vat_payment: document.getElementById('repairVatPayment').value,
-                guarantees: document.getElementById('repairGuarantees').value,
-                designer_supplier_terms: document.getElementById('repairDesignerSupplierTerms').value,
-                magazine_cards: magazineCards,
-                additional_info: document.getElementById('repairAdditionalInfo').value,
-                data_processing_consent: document.getElementById('repairConsent').checked,
+                group: repairGroup.value,
+                brand_name: repairBrandName.value,
+                phone: repairPhone.value,
+                email: repairEmail.value,
+                responsible_person: repairResponsible.value,
+                representative_cities: [],
+                business_form: repairBusinessForm.value,
+                business_form_details: repairBusinessFormDetails.value,
+                work_list: repairWorkList.value,
+                welcome_message: repairWelcomeMessage.value,
+                cooperation_terms: repairCooperationTerms.value,
+                project_timelines: repairProjectTimelines.value,
+                segments: getSelectedCheckboxes('segments', 'repairSection'),
+                vk: '',
+                telegram_channel: '',
+                pinterest: '',
+                instagram: '',
+                website: '',
+                other_contacts: [],
+                work_format: repairWorkFormat.value,
+                vat_payment: repairVatPayment.value,
+                guarantees: repairGuarantees.value,
+                designer_supplier_terms: repairDesignerSupplierTerms.value,
+                magazine_cards: getSelectedCheckboxes('magazine_cards', 'repairSection'),
+                additional_info: repairAdditionalInfo.value,
+                data_processing_consent: repairConsent.checked,
                 company_logo: null,
                 legal_entity_card: null
             };
-            
+        
             try {
-                const response = await fetch(url, {
+                const response = await fetch(`${baseUrl()}/api/v1/accounts/repair-questionnaires/`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token
+                        'Authorization': getToken(),
+                        'Accept': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: objectToFormData(data)
                 });
-                
+            
                 const result = await response.json();
                 showResponse('repairResponse', response.ok, result);
             } catch (error) {
@@ -640,37 +671,41 @@
             }
         }
         
+        /* ===============================
+           SUPPLIER
+        ================================ */
         async function testSupplier() {
-            const token = getToken();
-            const url = `${baseUrl()}/api/v1/accounts/supplier-questionnaires/`;
-            
-            const segments = getSelectedCheckboxes('segments', 'supplierSection');
-            const magazineCards = getSelectedCheckboxes('magazine_cards', 'supplierSection');
-            
             const data = {
-                group: document.getElementById('supplierGroup').value,
-                full_name: document.getElementById('supplierFullName').value,
-                brand_name: document.getElementById('supplierBrandName').value,
-                email: document.getElementById('supplierEmail').value,
-                phone: document.getElementById('supplierPhone').value,
-                responsible_person: document.getElementById('supplierResponsible').value,
-                segments: segments,
-                magazine_cards: magazineCards,
-                data_processing_consent: document.getElementById('supplierConsent').checked,
+                group: supplierGroup.value,
+                full_name: supplierFullName.value,
+                brand_name: supplierBrandName.value,
+                email: supplierEmail.value,
+                phone: supplierPhone.value,
+                responsible_person: supplierResponsible.value,
                 representative_cities: [],
-                other_contacts: []
+                segments: getSelectedCheckboxes('segments', 'supplierSection'),
+                magazine_cards: getSelectedCheckboxes('magazine_cards', 'supplierSection'),
+                vk: '',
+                telegram_channel: '',
+                pinterest: '',
+                instagram: '',
+                website: '',
+                other_contacts: [],
+                data_processing_consent: supplierConsent.checked,
+                company_logo: null,
+                legal_entity_card: null
             };
-            
+        
             try {
-                const response = await fetch(url, {
+                const response = await fetch(`${baseUrl()}/api/v1/accounts/supplier-questionnaires/`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token
+                        'Authorization': getToken(),
+                        'Accept': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: objectToFormData(data)
                 });
-                
+            
                 const result = await response.json();
                 showResponse('supplierResponse', response.ok, result);
             } catch (error) {
@@ -678,54 +713,55 @@
             }
         }
         
+        /* ===============================
+           MEDIA
+        ================================ */
         async function testMedia() {
-            const token = getToken();
-            const url = `${baseUrl()}/api/v1/accounts/media-questionnaires/`;
-            
-            const segments = getSelectedCheckboxes('segments', 'mediaSection');
-            
             const data = {
-                group: document.getElementById('mediaGroup').value,
-                brand_name: document.getElementById('mediaBrandName').value,
-                email: document.getElementById('mediaEmail').value,
-                phone: document.getElementById('mediaPhone').value,
-                responsible_person: document.getElementById('mediaResponsible').value,
-                representative_cities: [""],
-                business_form: document.getElementById('mediaBusinessForm').value,
-                business_form_details: document.getElementById('mediaBusinessFormDetails').value,
-                activity_description: document.getElementById('mediaActivity').value,
-                welcome_message: document.getElementById('mediaWelcome').value,
-                cooperation_terms: document.getElementById('mediaCooperation').value,
-                segments: segments,
-                vk: "",
-                telegram_channel: "",
-                pinterest: "",
-                instagram: "",
-                website: "",
-                other_contacts: [""],
-                vat_payment: document.getElementById('mediaVatPayment').value,
-                additional_info: document.getElementById('mediaAdditionalInfo').value,
-                data_processing_consent: document.getElementById('mediaConsent').checked,
+                group: mediaGroup.value,
+                brand_name: mediaBrandName.value,
+                email: mediaEmail.value,
+                phone: mediaPhone.value,
+                responsible_person: mediaResponsible.value,
+                representative_cities: [],
+                business_form: mediaBusinessForm.value,
+                business_form_details: mediaBusinessFormDetails.value,
+                activity_description: mediaActivity.value,
+                welcome_message: mediaWelcome.value,
+                cooperation_terms: mediaCooperation.value,
+                segments: getSelectedCheckboxes('segments', 'mediaSection'),
+                vk: '',
+                telegram_channel: '',
+                pinterest: '',
+                instagram: '',
+                website: '',
+                other_contacts: [],
+                vat_payment: mediaVatPayment.value,
+                additional_info: mediaAdditionalInfo.value,
+                data_processing_consent: mediaConsent.checked,
                 company_logo: null,
                 legal_entity_card: null
             };
-            
+        
             try {
-                const response = await fetch(url, {
+                const response = await fetch(`${baseUrl()}/api/v1/accounts/media-questionnaires/`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token
+                        'Authorization': getToken(),
+                        'Accept': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: objectToFormData(data)
                 });
-                
+            
                 const result = await response.json();
                 showResponse('mediaResponse', response.ok, result);
             } catch (error) {
                 showResponse('mediaResponse', false, { error: error.message });
             }
         }
-    </script>
+        </script>
+        
+        </body>
+        </html>
 </body>
 </html>

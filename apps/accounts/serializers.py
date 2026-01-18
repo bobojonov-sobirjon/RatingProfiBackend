@@ -925,16 +925,16 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         read_only=True
     )
     
-    # Multiple choice fields for Swagger
+    # Multiple choice fields for Swagger - ListField without child validation
     services = serializers.ListField(
-        child=serializers.ChoiceField(choices=DesignerQuestionnaire.SERVICES_CHOICES, allow_blank=False),
+        child=serializers.CharField(),
         required=False,
         allow_empty=True,
         help_text="Список услуг (multiple choice). Пример: ['author_supervision', 'architecture']"
     )
     
     segments = serializers.ListField(
-        child=serializers.ChoiceField(choices=DesignerQuestionnaire.SEGMENT_CHOICES, allow_blank=False),
+        child=serializers.CharField(),
         required=False,
         allow_empty=True,
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
@@ -1029,10 +1029,24 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                             parsed = json.loads(value)
                             # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
                             if isinstance(parsed, list):
-                                data[field] = parsed
+                                # List elementlarini string ga o'zgartirish (CharField uchun)
+                                parsed_list = [str(item) for item in parsed if item is not None]
+                                # QueryDict da listni o'rnatish uchun setlist yoki __setitem__ ishlatamiz
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                             else:
                                 # Agar list bo'lmasa, listga o'zgartiramiz
-                                data[field] = [parsed] if parsed else []
+                                parsed_list = [str(parsed)] if parsed else []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
                             # Masalan: "business,comfort" -> ["business", "comfort"]
@@ -1041,9 +1055,20 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                             # Vergul bilan ajratilgan stringlarni listga o'zgartirish
                             if value.strip():
                                 # Bo'sh bo'lmagan stringlarni listga o'zgartirish
-                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
+                                parsed_list = [item.strip() for item in value.split(',') if item.strip()]
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                             else:
-                                data[field] = []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, [])
+                                else:
+                                    data[field] = []
             
             # JSONField fields - work_cities, other_contacts
             json_fields = ['work_cities', 'other_contacts']
@@ -1348,20 +1373,21 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         read_only=True
     )
     
-    # Multiple choice fields for Swagger
+    # Multiple choice fields for Swagger - ListField without child validation
     segments = serializers.ListField(
-        child=serializers.ChoiceField(choices=RepairQuestionnaire.SEGMENT_CHOICES, allow_blank=False),
+        child=serializers.CharField(),
         required=False,
         allow_empty=True,
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
     
     magazine_cards = serializers.ListField(
-        child=serializers.ChoiceField(choices=RepairQuestionnaire.MAGAZINE_CARD_CHOICES, allow_blank=False),
+        child=serializers.CharField(),
         required=False,
         allow_empty=True,
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
     )
+    
     
     class Meta:
         model = RepairQuestionnaire
@@ -1457,10 +1483,24 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                             parsed = json.loads(value)
                             # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
                             if isinstance(parsed, list):
-                                data[field] = parsed
+                                # List elementlarini string ga o'zgartirish (CharField uchun)
+                                parsed_list = [str(item) for item in parsed if item is not None]
+                                # QueryDict da listni o'rnatish uchun setlist yoki __setitem__ ishlatamiz
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                             else:
                                 # Agar list bo'lmasa, listga o'zgartiramiz
-                                data[field] = [parsed] if parsed else []
+                                parsed_list = [str(parsed)] if parsed else []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
                             # Masalan: "business,comfort" -> ["business", "comfort"]
@@ -1469,9 +1509,20 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                             # Vergul bilan ajratilgan stringlarni listga o'zgartirish
                             if value.strip():
                                 # Bo'sh bo'lmagan stringlarni listga o'zgartirish
-                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
+                                parsed_list = [item.strip() for item in value.split(',') if item.strip()]
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                             else:
-                                data[field] = []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, [])
+                                else:
+                                    data[field] = []
             
             # JSONField fields - representative_cities, other_contacts
             json_fields = ['representative_cities', 'other_contacts']
@@ -1501,6 +1552,7 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                     if hasattr(data, '_mutable') and not data._mutable:
                         data._mutable = True
                     data['website'] = None
+        
         return super().to_internal_value(data)
     
     def validate_segments(self, value):
@@ -1777,14 +1829,14 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
     
     # Multiple choice fields for Swagger
     segments = serializers.ListField(
-        child=serializers.ChoiceField(choices=SupplierQuestionnaire.SEGMENT_CHOICES, allow_blank=False),
+        child=serializers.CharField(),
         required=False,
         allow_empty=True,
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
     
     magazine_cards = serializers.ListField(
-        child=serializers.ChoiceField(choices=SupplierQuestionnaire.MAGAZINE_CARD_CHOICES, allow_blank=False),
+        child=serializers.CharField(),
         required=False,
         allow_empty=True,
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
@@ -1882,10 +1934,24 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                             parsed = json.loads(value)
                             # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
                             if isinstance(parsed, list):
-                                data[field] = parsed
+                                # List elementlarini string ga o'zgartirish (CharField uchun)
+                                parsed_list = [str(item) for item in parsed if item is not None]
+                                # QueryDict da listni o'rnatish uchun setlist yoki __setitem__ ishlatamiz
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                             else:
                                 # Agar list bo'lmasa, listga o'zgartiramiz
-                                data[field] = [parsed] if parsed else []
+                                parsed_list = [str(parsed)] if parsed else []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
                             # Masalan: "business,comfort" -> ["business", "comfort"]
@@ -1894,9 +1960,20 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                             # Vergul bilan ajratilgan stringlarni listga o'zgartirish
                             if value.strip():
                                 # Bo'sh bo'lmagan stringlarni listga o'zgartirish
-                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
+                                parsed_list = [item.strip() for item in value.split(',') if item.strip()]
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                             else:
-                                data[field] = []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, [])
+                                else:
+                                    data[field] = []
             
             # JSONField fields - representative_cities, other_contacts
             json_fields = ['representative_cities', 'other_contacts']
@@ -2068,7 +2145,7 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
     
     # Multiple choice fields for Swagger
     segments = serializers.ListField(
-        child=serializers.ChoiceField(choices=MediaQuestionnaire.SEGMENT_CHOICES, allow_blank=False),
+        child=serializers.CharField(),
         required=False,
         allow_empty=True,
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
@@ -2157,10 +2234,24 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                             parsed = json.loads(value)
                             # Agar list bo'lsa, to'g'ridan-to'g'ri o'rnatamiz
                             if isinstance(parsed, list):
-                                data[field] = parsed
+                                # List elementlarini string ga o'zgartirish (CharField uchun)
+                                parsed_list = [str(item) for item in parsed if item is not None]
+                                # QueryDict da listni o'rnatish uchun setlist yoki __setitem__ ishlatamiz
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                             else:
                                 # Agar list bo'lmasa, listga o'zgartiramiz
-                                data[field] = [parsed] if parsed else []
+                                parsed_list = [str(parsed)] if parsed else []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                         except (json.JSONDecodeError, ValueError):
                             # Agar JSON parse qilib bo'lmasa, vergul bilan ajratilgan string bo'lishi mumkin
                             # Masalan: "business,comfort" -> ["business", "comfort"]
@@ -2169,9 +2260,20 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                             # Vergul bilan ajratilgan stringlarni listga o'zgartirish
                             if value.strip():
                                 # Bo'sh bo'lmagan stringlarni listga o'zgartirish
-                                data[field] = [item.strip() for item in value.split(',') if item.strip()]
+                                parsed_list = [item.strip() for item in value.split(',') if item.strip()]
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, parsed_list)
+                                else:
+                                    data[field] = parsed_list
                             else:
-                                data[field] = []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                if hasattr(data, 'setlist'):
+                                    data.setlist(field, [])
+                                else:
+                                    data[field] = []
             
             # JSONField fields - representative_cities, other_contacts
             json_fields = ['representative_cities', 'other_contacts']
