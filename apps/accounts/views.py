@@ -1238,6 +1238,109 @@ class QuestionnaireListView(views.APIView):
 
 
 @extend_schema(
+    tags=['All Questionnaires'],
+    summary='Мои анкеты (по телефону и email текущего пользователя)',
+    description='''
+    GET: Получить объединенный список всех анкет (дизайнеров, ремонтных бригад/подрядчиков, поставщиков/салонов/фабрик и медиа пространств/интерьерных журналов),
+    которые принадлежат текущему авторизованному пользователю по его телефону и/или email.
+    
+    Фильтрация происходит автоматически по:
+    - phone: телефону текущего пользователя (request.user.phone)
+    - email: email текущего пользователя (request.user.email)
+    
+    Если у пользователя указаны оба поля (phone и email), попадают анкеты, где совпадает хотя бы одно из полей.
+    
+    Пагинация:
+    - limit: Количество результатов на странице (по умолчанию: 20, максимум: 100)
+    - offset: Смещение для пагинации (по умолчанию: 0)
+    
+    Ответ: такой же формат, как у /questionnaires/all/
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='limit',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Количество результатов на странице (по умолчанию: 20, максимум: 100)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='offset',
+            type=int,
+            location=OpenApiParameter.QUERY,
+            description='Смещение для пагинации (по умолчанию: 0)',
+            required=False,
+        ),
+    ],
+    responses={
+        200: {'description': 'Список анкет текущего пользователя'},
+        401: {'description': 'Требуется авторизация'}
+    }
+)
+class MyQuestionnairesView(views.APIView):
+    """
+    Мои анкеты - список всех анкет текущего пользователя по его телефону и/или email
+    GET /api/v1/accounts/questionnaires/my-questionnaires/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        phone = (user.phone or '').strip()
+        email = (user.email or '').strip()
+        
+        if not phone and not email:
+            return Response(
+                {'detail': 'У пользователя не указан ни телефон, ни email'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        from django.db.models import Q
+        
+        contact_q = Q()
+        if phone:
+            # Telefon raqamini tozalash (faqat raqamlar)
+            clean_phone = ''.join(filter(str.isdigit, phone))
+            if clean_phone:
+                contact_q |= Q(phone__icontains=clean_phone)
+        if email:
+            contact_q |= Q(email__iexact=email)
+        
+        # Всегда берем только не удаленные анкеты, без учета модерации,
+        # чтобы пользователь видел свои заявки независимо от статуса.
+        designer_qs = DesignerQuestionnaire.objects.filter(is_deleted=False).filter(contact_q)
+        repair_qs = RepairQuestionnaire.objects.filter(is_deleted=False).filter(contact_q)
+        supplier_qs = SupplierQuestionnaire.objects.filter(is_deleted=False).filter(contact_q)
+        media_qs = MediaQuestionnaire.objects.filter(is_deleted=False).filter(contact_q)
+        
+        designer_serializer = DesignerQuestionnaireSerializer(designer_qs, many=True, context={'request': request})
+        repair_serializer = RepairQuestionnaireSerializer(repair_qs, many=True, context={'request': request})
+        supplier_serializer = SupplierQuestionnaireSerializer(supplier_qs, many=True, context={'request': request})
+        media_serializer = MediaQuestionnaireSerializer(media_qs, many=True, context={'request': request})
+        
+        combined_data = (
+            list(designer_serializer.data) +
+            list(repair_serializer.data) +
+            list(supplier_serializer.data) +
+            list(media_serializer.data)
+        )
+        
+        # Сортируем по дате создания (новые первыми)
+        combined_data.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        # Pagination
+        paginator = LimitOffsetPagination()
+        paginator.default_limit = 20
+        paginator.max_limit = 100
+        
+        page = paginator.paginate_queryset(combined_data, request)
+        if page is not None:
+            return paginator.get_paginated_response(page)
+        
+        return Response(combined_data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
     tags=['Accounts'],
     responses={
         200: UserPublicSerializer,

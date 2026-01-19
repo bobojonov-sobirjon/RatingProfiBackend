@@ -13,6 +13,7 @@ from .views import (
     UserPublicProfileView,
     UserListView,
     QuestionnaireListView,
+    MyQuestionnairesView,
     QuestionnaireArchiveListView,
     DesignerQuestionnaireListView,
     DesignerQuestionnaireDetailView,
@@ -66,6 +67,7 @@ urlpatterns = [
     path('roles/', UserRolesView.as_view(), name='user-roles'),
     
     path('questionnaires/all/', QuestionnaireListView.as_view(), name='all-questionnaires-list'),
+    path('questionnaires/my-questionnaires/', MyQuestionnairesView.as_view(), name='my-questionnaires'),
     path('questionnaires/all/archive/', QuestionnaireArchiveListView.as_view(), name='all-questionnaires-archive'),
     
     path('questionnaires/', DesignerQuestionnaireListView.as_view(), name='questionnaire-list'),
