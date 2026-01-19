@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils import timezone
 from datetime import timedelta
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from .models import SMSVerificationCode, DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire, MediaQuestionnaire
 from .utils import send_sms_via_smsaero, generate_sms_code
 
@@ -714,6 +715,10 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         # group ga qarab to'g'ri request_name qaytaramiz
         if obj.group == 'media':
             return 'MediaQuestionnaire'
+        elif obj.group == 'supplier':
+            return 'SupplierQuestionnaire'
+        elif obj.group == 'repair':
+            return 'RepairQuestionnaire'
         return 'DesignerQuestionnaire'
     
     @extend_schema_field(dict)
@@ -1155,6 +1160,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                 if field in data:
                     file_value = data.get(field)
                     # Faqat string bo'lsa tekshiramiz (file obyektlarni o'zgartirmaymiz)
+                    # File obyektlarni tekshirish uchun isinstance yoki hasattr ishlatamiz
                     if isinstance(file_value, str):
                         # Agar bo'sh string yoki 'null' string bo'lsa, None ga o'zgartirish
                         if not file_value.strip() or file_value.strip().lower() == 'null':
@@ -1162,6 +1168,10 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                                 data._mutable = True
                             data[field] = None
                     # Agar file obyekt bo'lsa (InMemoryUploadedFile, TemporaryUploadedFile), hech narsa qilmaymiz
+                    # File obyektlarni o'zgartirmaymiz, chunki DRF ularni to'g'ri handle qiladi
+                    elif isinstance(file_value, (InMemoryUploadedFile, TemporaryUploadedFile)):
+                        # File obyektni o'zgartirmaymiz, to'g'ridan-to'g'ri o'tkazib yuboramiz
+                        pass
         return super().to_internal_value(data)
     
     def validate_services(self, value):
@@ -1223,6 +1233,13 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
     
     @extend_schema_field(str)
     def get_request_name(self, obj):
+        # group ga qarab to'g'ri request_name qaytaramiz
+        if obj.group == 'supplier':
+            return 'SupplierQuestionnaire'
+        elif obj.group == 'media':
+            return 'MediaQuestionnaire'
+        elif obj.group == 'design':
+            return 'DesignerQuestionnaire'
         return 'RepairQuestionnaire'
     
     @extend_schema_field(str)
@@ -1666,6 +1683,7 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                 if field in data:
                     file_value = data.get(field)
                     # Faqat string bo'lsa tekshiramiz (file obyektlarni o'zgartirmaymiz)
+                    # File obyektlarni tekshirish uchun isinstance yoki hasattr ishlatamiz
                     if isinstance(file_value, str):
                         # Agar bo'sh string yoki 'null' string bo'lsa, None ga o'zgartirish
                         if not file_value.strip() or file_value.strip().lower() == 'null':
@@ -1673,6 +1691,10 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                                 data._mutable = True
                             data[field] = None
                     # Agar file obyekt bo'lsa (InMemoryUploadedFile, TemporaryUploadedFile), hech narsa qilmaymiz
+                    # File obyektlarni o'zgartirmaymiz, chunki DRF ularni to'g'ri handle qiladi
+                    elif isinstance(file_value, (InMemoryUploadedFile, TemporaryUploadedFile)):
+                        # File obyektni o'zgartirmaymiz, to'g'ridan-to'g'ri o'tkazib yuboramiz
+                        pass
         
         return super().to_internal_value(data)
     
@@ -1735,6 +1757,13 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
     
     @extend_schema_field(str)
     def get_request_name(self, obj):
+        # group ga qarab to'g'ri request_name qaytaramiz
+        if obj.group == 'repair':
+            return 'RepairQuestionnaire'
+        elif obj.group == 'media':
+            return 'MediaQuestionnaire'
+        elif obj.group == 'design':
+            return 'DesignerQuestionnaire'
         return 'SupplierQuestionnaire'
     
     @extend_schema_field(str)
@@ -2177,6 +2206,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                 if field in data:
                     file_value = data.get(field)
                     # Faqat string bo'lsa tekshiramiz (file obyektlarni o'zgartirmaymiz)
+                    # File obyektlarni tekshirish uchun isinstance yoki hasattr ishlatamiz
                     if isinstance(file_value, str):
                         # Agar bo'sh string yoki 'null' string bo'lsa, None ga o'zgartirish
                         if not file_value.strip() or file_value.strip().lower() == 'null':
@@ -2184,6 +2214,10 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                                 data._mutable = True
                             data[field] = None
                     # Agar file obyekt bo'lsa (InMemoryUploadedFile, TemporaryUploadedFile), hech narsa qilmaymiz
+                    # File obyektlarni o'zgartirmaymiz, chunki DRF ularni to'g'ri handle qiladi
+                    elif isinstance(file_value, (InMemoryUploadedFile, TemporaryUploadedFile)):
+                        # File obyektni o'zgartirmaymiz, to'g'ridan-to'g'ri o'tkazib yuboramiz
+                        pass
         return super().to_internal_value(data)
     
     def validate_segments(self, value):
@@ -2238,6 +2272,13 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
     
     @extend_schema_field(str)
     def get_request_name(self, obj):
+        # group ga qarab to'g'ri request_name qaytaramiz
+        if obj.group == 'supplier':
+            return 'SupplierQuestionnaire'
+        elif obj.group == 'repair':
+            return 'RepairQuestionnaire'
+        elif obj.group == 'design':
+            return 'DesignerQuestionnaire'
         return 'MediaQuestionnaire'
     
     @extend_schema_field(dict)
@@ -2536,6 +2577,7 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                 if field in data:
                     file_value = data.get(field)
                     # Faqat string bo'lsa tekshiramiz (file obyektlarni o'zgartirmaymiz)
+                    # File obyektlarni tekshirish uchun isinstance yoki hasattr ishlatamiz
                     if isinstance(file_value, str):
                         # Agar bo'sh string yoki 'null' string bo'lsa, None ga o'zgartirish
                         if not file_value.strip() or file_value.strip().lower() == 'null':
@@ -2543,6 +2585,10 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                                 data._mutable = True
                             data[field] = None
                     # Agar file obyekt bo'lsa (InMemoryUploadedFile, TemporaryUploadedFile), hech narsa qilmaymiz
+                    # File obyektlarni o'zgartirmaymiz, chunki DRF ularni to'g'ri handle qiladi
+                    elif isinstance(file_value, (InMemoryUploadedFile, TemporaryUploadedFile)):
+                        # File obyektni o'zgartirmaymiz, to'g'ridan-to'g'ri o'tkazib yuboramiz
+                        pass
         return super().to_internal_value(data)
     
     def validate_segments(self, value):

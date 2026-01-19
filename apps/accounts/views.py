@@ -2644,7 +2644,7 @@ class RepairQuestionnaireDetailView(views.APIView):
     def put(self, request, pk):
         if not request.user.is_authenticated:
             raise PermissionDenied("Требуется авторизация для обновления анкеты")
-        questionnaire = self.get_object(pk)
+        questionnaire = self.get_object(pk, request)
         serializer = RepairQuestionnaireSerializer(questionnaire, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -3428,7 +3428,7 @@ class SupplierQuestionnaireDetailView(views.APIView):
     def put(self, request, pk):
         if not request.user.is_authenticated:
             raise PermissionDenied("Требуется авторизация для обновления анкеты")
-        questionnaire = self.get_object(pk)
+        questionnaire = self.get_object(pk, request)
         serializer = SupplierQuestionnaireSerializer(questionnaire, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
