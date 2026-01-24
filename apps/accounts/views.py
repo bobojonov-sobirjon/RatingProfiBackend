@@ -1680,6 +1680,21 @@ class DesignerQuestionnaireListView(views.APIView):
         return paginator.get_paginated_response(serializer.data)
     
     def post(self, request):
+        # Phone tekshirish - bir xil phone bilan ikkinchi marta create qilish mumkin emas
+        phone = request.data.get('phone')
+        if phone:
+            from .models import DesignerQuestionnaire
+            # Agar allaqachon shu phone bilan questionnaire yaratilgan bo'lsa
+            existing_questionnaire = DesignerQuestionnaire.objects.filter(
+                phone=phone,
+                is_deleted=False
+            ).first()
+            
+            if existing_questionnaire:
+                return Response({
+                    'phone': ['Анкета с таким номером телефона уже существует. Один номер телефона может быть использован только один раз.']
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = DesignerQuestionnaireSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -2639,6 +2654,21 @@ class RepairQuestionnaireListView(views.APIView):
         return paginator.get_paginated_response(serializer.data)
     
     def post(self, request):
+        # Phone tekshirish - bir xil phone bilan ikkinchi marta create qilish mumkin emas
+        phone = request.data.get('phone')
+        if phone:
+            from .models import RepairQuestionnaire
+            # Agar allaqachon shu phone bilan questionnaire yaratilgan bo'lsa
+            existing_questionnaire = RepairQuestionnaire.objects.filter(
+                phone=phone,
+                is_deleted=False
+            ).first()
+            
+            if existing_questionnaire:
+                return Response({
+                    'phone': ['Анкета с таким номером телефона уже существует. Один номер телефона может быть использован только один раз.']
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = RepairQuestionnaireSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -2829,7 +2859,6 @@ class DesignerQuestionnaireStatusUpdateView(views.APIView):
     - categories: Основные категории (group choices) - Выберете основную котегорию
     - cities: Список уникальных городов из representative_cities - Выберете город
     - segments: Сегменты работы - Выберете сегмент
-    - business_forms: Формы бизнеса - Форма бизнеса
     ''',
     responses={
         200: {'description': 'Варианты для фильтров'}
@@ -2885,7 +2914,6 @@ class DesignerQuestionnaireStatusUpdateView(views.APIView):
       * До 5% (up_to_5_percent)
       * До 10% (up_to_10_percent)
       * не важно (not_important)
-    - business_forms: Формы бизнеса - Форма бизнеса
     ''',
     parameters=[
         OpenApiParameter(
@@ -2985,12 +3013,12 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
             {'value': 'not_important', 'label': 'Не важно'},
         ]
         
-        # Карточки журналов - Карточки журналов (ko'p tanlash mumkin)
+        # Карточки журналов - Карточки журналов (faqat model'dagi choices)
+        from .models import RepairQuestionnaire
         magazine_cards = [
-            {'value': 'hi_home', 'label': 'Hi Home'},
-            {'value': 'in_home', 'label': 'In Home'},
-            {'value': 'no', 'label': 'Нет'},
-            {'value': 'not_important', 'label': 'Не важно'},
+            {'value': choice[0], 'label': choice[1]} 
+            for choice in RepairQuestionnaire.MAGAZINE_CARD_CHOICES
+            if choice[0] != 'other'  # "other" ni olib tashlaymiz
         ]
         
         # Скорость исполнения - Скорость исполнения
@@ -3007,12 +3035,6 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
             {'value': 'not_important', 'label': 'Не важно'},
         ]
         
-        # Формы бизнеса
-        business_forms = [
-            {'value': choice[0], 'label': choice[1].capitalize()} 
-            for choice in RepairQuestionnaire.BUSINESS_FORM_CHOICES
-        ]
-        
         return Response({
             'categories': categories,
             'cities': cities_list,
@@ -3021,7 +3043,6 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
             'magazine_cards': magazine_cards,
             'execution_speeds': execution_speeds,
             'cooperation_terms_options': cooperation_terms_options,
-            'business_forms': business_forms,
         }, status=status.HTTP_200_OK)
 
 
@@ -3425,6 +3446,21 @@ class SupplierQuestionnaireListView(views.APIView):
         return paginator.get_paginated_response(serializer.data)
     
     def post(self, request):
+        # Phone tekshirish - bir xil phone bilan ikkinchi marta create qilish mumkin emas
+        phone = request.data.get('phone')
+        if phone:
+            from .models import SupplierQuestionnaire
+            # Agar allaqachon shu phone bilan questionnaire yaratilgan bo'lsa
+            existing_questionnaire = SupplierQuestionnaire.objects.filter(
+                phone=phone,
+                is_deleted=False
+            ).first()
+            
+            if existing_questionnaire:
+                return Response({
+                    'phone': ['Анкета с таким номером телефона уже существует. Один номер телефона может быть использован только один раз.']
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = SupplierQuestionnaireSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -3743,7 +3779,6 @@ class SupplierQuestionnaireDeleteView(views.APIView):
       * до 20% (up_to_20_percent)
       * до 30% (up_to_30_percent)
       * не важно (not_important)
-    - business_forms: Формы бизнеса - Форма бизнеса
     ''',
     parameters=[
         OpenApiParameter(
@@ -3837,26 +3872,13 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
             {'value': 'not_important', 'label': 'Не важно'},
         ]
         
-        # Карточки журналов - Карточки журналов (ko'p tanlash mumkin) + mediaspace variantlari
+        # Карточки журналов - Карточки журналов (faqat model'dagi choices)
+        from .models import SupplierQuestionnaire
         magazine_cards = [
-            {'value': 'hi_home', 'label': 'Hi Home'},
-            {'value': 'in_home', 'label': 'In Home'},
-            {'value': 'no', 'label': 'Нет'},
-            {'value': 'not_important', 'label': 'Не важно'},
+            {'value': choice[0], 'label': choice[1]} 
+            for choice in SupplierQuestionnaire.MAGAZINE_CARD_CHOICES
+            if choice[0] != 'other'  # "other" ni olib tashlaymiz
         ]
-        
-        # Mediaspace guruhidan variantlar qo'shamiz
-        # MediaQuestionnaire modelidan brand_name larni olamiz
-        media_query = MediaQuestionnaire.objects.filter(is_deleted=False)
-        
-        # MediaQuestionnaire modelida brand_name bor
-        for media in media_query:
-            if media.brand_name:
-                # Duplicate larni oldini olish uchun value ni unique qilamiz
-                media_value = media.brand_name.lower().replace(' ', '_').replace('-', '_')
-                # Agar allaqachon qo'shilgan bo'lsa, qo'shmaslik
-                if not any(card['value'] == media_value for card in magazine_cards):
-                    magazine_cards.append({'value': media_value, 'label': media.brand_name.capitalize()})
         
         # Скорость исполнения - Скорость исполнения (ko'p tanlash mumkin)
         execution_speeds = [
@@ -3875,12 +3897,6 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
             {'value': 'not_important', 'label': 'Не важно'},
         ]
         
-        # Формы бизнеса
-        business_forms = [
-            {'value': choice[0], 'label': choice[1].capitalize()} 
-            for choice in SupplierQuestionnaire.BUSINESS_FORM_CHOICES
-        ]
-        
         return Response({
             'categories': categories,
             'cities': cities_list,
@@ -3889,7 +3905,6 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
             'magazine_cards': magazine_cards,
             'execution_speeds': execution_speeds,
             'cooperation_terms_options': cooperation_terms_options,
-            'business_forms': business_forms,
         }, status=status.HTTP_200_OK)
 
 
@@ -4033,6 +4048,21 @@ class MediaQuestionnaireListView(views.APIView):
         return paginator.get_paginated_response(serializer.data)
     
     def post(self, request):
+        # Phone tekshirish - bir xil phone bilan ikkinchi marta create qilish mumkin emas
+        phone = request.data.get('phone')
+        if phone:
+            from .models import MediaQuestionnaire
+            # Agar allaqachon shu phone bilan questionnaire yaratilgan bo'lsa
+            existing_questionnaire = MediaQuestionnaire.objects.filter(
+                phone=phone,
+                is_deleted=False
+            ).first()
+            
+            if existing_questionnaire:
+                return Response({
+                    'phone': ['Анкета с таким номером телефона уже существует. Один номер телефона может быть использован только один раз.']
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = MediaQuestionnaireSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
