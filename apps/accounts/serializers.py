@@ -948,6 +948,38 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
     
+    def to_representation(self, instance):
+        """Convert choice keys to display names in response"""
+        data = super().to_representation(instance)
+        
+        # Convert services keys to display names
+        if 'services' in data and data['services'] is not None:
+            choices_dict = dict(DesignerQuestionnaire.SERVICES_CHOICES)
+            data['services'] = [choices_dict.get(service, service) for service in data['services']]
+        
+        # Convert segments keys to display names
+        if 'segments' in data and data['segments'] is not None:
+            choices_dict = dict(DesignerQuestionnaire.SEGMENT_CHOICES)
+            data['segments'] = [choices_dict.get(segment, segment) for segment in data['segments']]
+        
+        # Convert work_type key to display name
+        if 'work_type' in data and data['work_type'] is not None:
+            data['work_type'] = instance.get_work_type_display()
+        
+        # Convert vat_payment key to display name
+        if 'vat_payment' in data and data['vat_payment'] is not None:
+            data['vat_payment'] = instance.get_vat_payment_display()
+        
+        # Convert status key to display name
+        if 'status' in data and data['status'] is not None:
+            data['status'] = instance.get_status_display()
+        
+        # Convert group key to display name
+        if 'group' in data and data['group'] is not None:
+            data['group'] = instance.get_group_display()
+        
+        return data
+    
     # JSONField fields - work_cities, other_contacts
     # ListField ishlatamiz, chunki JSONField form-data bilan muammo qilmoqda
     work_cities = serializers.ListField(
@@ -1467,6 +1499,38 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         allow_empty=True,
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
     )
+    
+    def to_representation(self, instance):
+        """Convert choice keys to display names in response"""
+        data = super().to_representation(instance)
+        
+        # Convert segments keys to display names
+        if 'segments' in data and data['segments'] is not None:
+            choices_dict = dict(RepairQuestionnaire.SEGMENT_CHOICES)
+            data['segments'] = [choices_dict.get(segment, segment) for segment in data['segments']]
+        
+        # Convert business_form key to display name
+        if 'business_form' in data and data['business_form'] is not None:
+            data['business_form'] = instance.get_business_form_display()
+        
+        # Convert magazine_cards keys to display names
+        if 'magazine_cards' in data and data['magazine_cards'] is not None:
+            choices_dict = dict(RepairQuestionnaire.MAGAZINE_CARD_CHOICES)
+            data['magazine_cards'] = [choices_dict.get(card, card) for card in data['magazine_cards']]
+        
+        # Convert vat_payment key to display name
+        if 'vat_payment' in data and data['vat_payment'] is not None:
+            data['vat_payment'] = instance.get_vat_payment_display()
+        
+        # Convert status key to display name
+        if 'status' in data and data['status'] is not None:
+            data['status'] = instance.get_status_display()
+        
+        # Convert group key to display name
+        if 'group' in data and data['group'] is not None:
+            data['group'] = instance.get_group_display()
+        
+        return data
     
     # JSONField fields - representative_cities, other_contacts
     # ListField ishlatamiz, chunki JSONField form-data bilan muammo qilmoqda
@@ -1992,6 +2056,38 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
     )
     
+    def to_representation(self, instance):
+        """Convert choice keys to display names in response"""
+        data = super().to_representation(instance)
+        
+        # Convert segments keys to display names
+        if 'segments' in data and data['segments'] is not None:
+            choices_dict = dict(SupplierQuestionnaire.SEGMENT_CHOICES)
+            data['segments'] = [choices_dict.get(segment, segment) for segment in data['segments']]
+        
+        # Convert business_form key to display name
+        if 'business_form' in data and data['business_form'] is not None:
+            data['business_form'] = instance.get_business_form_display()
+        
+        # Convert magazine_cards keys to display names
+        if 'magazine_cards' in data and data['magazine_cards'] is not None:
+            choices_dict = dict(SupplierQuestionnaire.MAGAZINE_CARD_CHOICES)
+            data['magazine_cards'] = [choices_dict.get(card, card) for card in data['magazine_cards']]
+        
+        # Convert vat_payment key to display name
+        if 'vat_payment' in data and data['vat_payment'] is not None:
+            data['vat_payment'] = instance.get_vat_payment_display()
+        
+        # Convert status key to display name
+        if 'status' in data and data['status'] is not None:
+            data['status'] = instance.get_status_display()
+        
+        # Convert group key to display name
+        if 'group' in data and data['group'] is not None:
+            data['group'] = instance.get_group_display()
+        
+        return data
+    
     # JSONField fields - representative_cities, other_contacts
     # ListField ishlatamiz, chunki JSONField form-data bilan muammo qilmoqda
     representative_cities = serializers.ListField(
@@ -2371,6 +2467,29 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
         allow_empty=True,
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
+    
+    def to_representation(self, instance):
+        """Convert choice keys to display names in response"""
+        data = super().to_representation(instance)
+        
+        # Convert segments keys to display names
+        if 'segments' in data and data['segments'] is not None:
+            choices_dict = dict(MediaQuestionnaire.SEGMENT_CHOICES)
+            data['segments'] = [choices_dict.get(segment, segment) for segment in data['segments']]
+        
+        # Convert vat_payment key to display name
+        if 'vat_payment' in data and data['vat_payment'] is not None:
+            data['vat_payment'] = instance.get_vat_payment_display()
+        
+        # Convert status key to display name
+        if 'status' in data and data['status'] is not None:
+            data['status'] = instance.get_status_display()
+        
+        # Convert group key to display name
+        if 'group' in data and data['group'] is not None:
+            data['group'] = instance.get_group_display()
+        
+        return data
     
     # JSONField fields - representative_cities, other_contacts
     # ListField ishlatamiz, chunki JSONField form-data bilan muammo qilmoqda
