@@ -128,6 +128,7 @@ class DesignerQuestionnaireAdmin(admin.ModelAdmin):
         'city',
         'status',
         'work_type',
+        'is_moderation',
         'created_at',
     ]
     list_filter = [
@@ -219,6 +220,7 @@ class RepairQuestionnaireAdmin(admin.ModelAdmin):
         'email',
         'status',
         'business_form',
+        'is_moderation',
         'created_at',
     ]
     list_filter = [
@@ -310,6 +312,7 @@ class SupplierQuestionnaireAdmin(admin.ModelAdmin):
         'email',
         'status',
         'business_form',
+        'is_moderation',
         'created_at',
     ]
     list_filter = [
@@ -395,6 +398,7 @@ class MediaQuestionnaireAdmin(admin.ModelAdmin):
         'brand_name',
         'email',
         'status',
+        'is_moderation',
         'created_at',
     ]
     list_filter = [
