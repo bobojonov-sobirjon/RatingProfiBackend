@@ -1433,6 +1433,13 @@ class UserPublicProfileView(views.APIView):
     - additional_info: Дополнительная информация (необязательное)
     - data_processing_consent: Согласие на обработку данных (обязательное, boolean)
     - photo: Прикрепите ваше фото для личного кабинета (необязательное, файл)
+    - categories: Категории (массив, необязательное). Варианты: residential_designer, commercial_designer, decorator, home_stager, architect, landscape_designer, light_designer
+    - purpose_of_property: Назначение недвижимости (массив, необязательное). Варианты: permanent_residence, for_rent, commercial, horeca
+    - area_of_object: Площадь объекта в м² (целое число, необязательное)
+    - cost_per_m2: Стоимость за м² в руб (целое число, необязательное)
+    - experience: Опыт работы (целое число, необязательное). 0=Новичок, 1=До 2 лет, 2=2-5 лет, 3=5-10 лет, 4=Свыше 10 лет
+    
+    GET возвращает те же поля; PUT принимает те же поля для обновления.
     ''',
     request=DesignerQuestionnaireSerializer,
     responses={
@@ -1459,6 +1466,13 @@ class DesignerQuestionnaireListView(views.APIView):
                 type=str,
                 location=OpenApiParameter.QUERY,
                 description='Выберете основную категорию (residential_designer, commercial_designer, decorator, home_stager, architect, landscape_designer, light_designer)',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='categories',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Категории (FilterChoices categories). Несколько через запятую. Фильтр по полю categories (JSONField)',
                 required=False,
             ),
             OpenApiParameter(
@@ -1549,6 +1563,17 @@ class DesignerQuestionnaireListView(views.APIView):
         if group:
             questionnaires = questionnaires.filter(group=group)
         
+        # Категории (categories - JSONField, FilterChoicesView categories)
+        categories_param = request.query_params.get('categories') or request.query_params.get('category')
+        if categories_param:
+            categories_list = [c.strip() for c in categories_param.split(',')]
+            from django.db.models import Q
+            cat_q = Q()
+            for cat in categories_list:
+                cat_q |= Q(categories__contains=[cat])
+            if cat_q:
+                questionnaires = questionnaires.filter(cat_q)
+        
         # Выберете город (city) - faqat a'zolar tomonidan e'lon qilingan shaharlar + maxsus variantlar
         city = request.query_params.get('city')
         if city:
@@ -1591,73 +1616,64 @@ class DesignerQuestionnaireListView(views.APIView):
             if segment_q:
                 questionnaires = questionnaires.filter(segment_q)
         
-        # Назначение недвижимости (property_purpose - services ichida)
+        # Назначение недвижимости (property_purpose → purpose_of_property JSONField)
         property_purpose = request.query_params.get('property_purpose')
         if property_purpose:
-            # Mapping: permanent_residence -> residential_designer, for_rent -> residential_designer, commercial -> commercial_designer, horeca -> designer_horika
-            purpose_mapping = {
-                'permanent_residence': 'residential_designer',
-                'for_rent': 'residential_designer',
-                'commercial': 'commercial_designer',
-                'horeca': 'designer_horika',
-            }
-            service_value = purpose_mapping.get(property_purpose, property_purpose)
-            questionnaires = questionnaires.filter(services__contains=[service_value])
+            purposes_list = [p.strip() for p in property_purpose.split(',')]
+            from django.db.models import Q
+            purpose_q = Q()
+            for p in purposes_list:
+                if p != 'not_important':
+                    purpose_q |= Q(purpose_of_property__contains=[p])
+            if purpose_q:
+                questionnaires = questionnaires.filter(purpose_q)
         
-        # Площадь объекта (object_area - service_packages_description ichida search, ko'p tanlash mumkin)
+        # Площадь объекта (object_area → area_of_object IntegerField yoki service_packages_description fallback)
         object_area = request.query_params.get('object_area')
         if object_area:
-            # Agar bir nechta area kelsa, ularni ajratib olamiz
             areas_list = [a.strip() for a in object_area.split(',')]
-            # Mapping: up_to_10m2 -> "10 м2", up_to_40m2 -> "40 м2", up_to_80m2 -> "80 м2", houses -> "дом", not_important -> skip
-            area_mapping = {
-                'up_to_10m2': '10 м2',
-                'up_to_40m2': '40 м2',
-                'up_to_80m2': '80 м2',
-                'houses': 'дом',
-            }
             from django.db.models import Q
             area_q = Q()
+            # area_of_object (integer) bo'yicha: up_to_10m2 -> <=10, up_to_40m2 -> <=40, up_to_80m2 -> <=80
+            area_max = {'up_to_10m2': 10, 'up_to_40m2': 40, 'up_to_80m2': 80}
             for area in areas_list:
-                if area != 'not_important':
-                    search_term = area_mapping.get(area, area)
-                    area_q |= Q(service_packages_description__icontains=search_term)
+                if area == 'not_important':
+                    continue
+                if area in area_max:
+                    area_q |= Q(area_of_object__lte=area_max[area])
+                elif area == 'houses':
+                    area_q |= Q(service_packages_description__icontains='дом')
+                else:
+                    area_q |= Q(service_packages_description__icontains=area)
             if area_q:
                 questionnaires = questionnaires.filter(area_q)
         
-        # Стоимость за м2 (cost_per_sqm - service_packages_description ichida search)
+        # Стоимость за м2 (cost_per_sqm → cost_per_m2 IntegerField)
         cost_per_sqm = request.query_params.get('cost_per_sqm')
         if cost_per_sqm and cost_per_sqm != 'not_important':
-            # Mapping: up_to_1500 -> "1500", up_to_2500 -> "2500", up_to_4000 -> "4000", over_4000 -> "4000" (lekin > 4000)
-            cost_mapping = {
-                'up_to_1500': '1500',
-                'up_to_2500': '2500',
-                'up_to_4000': '4000',
-                'over_4000': '4000',  # Bu uchun alohida logika kerak
-            }
-            search_term = cost_mapping.get(cost_per_sqm, cost_per_sqm)
-            if cost_per_sqm == 'over_4000':
-                # 4000 dan katta qiymatlar uchun
-                questionnaires = questionnaires.filter(service_packages_description__icontains=search_term)
+            from django.db.models import Q
+            cost_mapping = {'up_to_1500': 1500, 'up_to_2500': 2500, 'up_to_4000': 4000, 'over_4000': 4000}
+            max_val = cost_mapping.get(cost_per_sqm)
+            if max_val is not None:
+                if cost_per_sqm == 'over_4000':
+                    questionnaires = questionnaires.filter(cost_per_m2__gte=max_val)
+                else:
+                    questionnaires = questionnaires.filter(cost_per_m2__lte=max_val)
             else:
-                questionnaires = questionnaires.filter(service_packages_description__icontains=search_term)
+                questionnaires = questionnaires.filter(service_packages_description__icontains=cost_per_sqm)
         
-        # Опыт работы (experience - welcome_message ichida search yoki additional_info)
+        # Опыт работы (experience → experience IntegerField: 0=Новичок, 1=До 2 лет, 2=2-5, 3=5-10, 4=Свыше 10)
         experience = request.query_params.get('experience')
-        if experience:
-            # Mapping: beginner -> "новичок", up_to_2_years -> "2 лет", 2_5_years -> "2-5", 5_10_years -> "5-10", over_10_years -> "10 лет"
-            experience_mapping = {
-                'beginner': 'новичок',
-                'up_to_2_years': '2 лет',
-                '2_5_years': '2-5',
-                '5_10_years': '5-10',
-                'over_10_years': '10 лет',
-            }
-            search_term = experience_mapping.get(experience, experience)
-            questionnaires = questionnaires.filter(
-                django_models.Q(welcome_message__icontains=search_term) | 
-                django_models.Q(additional_info__icontains=search_term)
-            )
+        if experience and experience != 'not_important':
+            exp_mapping = {'beginner': 0, 'up_to_2_years': 1, '2_5_years': 2, '5_10_years': 3, 'over_10_years': 4}
+            exp_val = exp_mapping.get(experience)
+            if exp_val is not None:
+                questionnaires = questionnaires.filter(experience=exp_val)
+            else:
+                questionnaires = questionnaires.filter(
+                    django_models.Q(welcome_message__icontains=experience) |
+                    django_models.Q(additional_info__icontains=experience)
+                )
         
         # Search by full_name
         search = request.query_params.get('search')
@@ -2349,6 +2365,8 @@ class RepairQuestionnaireDeleteView(views.APIView):
       * in_home - IN HOME
       * no - Нет
       * other - Другое
+    - categories: Категории (массив, необязательное). Варианты: repair_team, contractor, finishing, electrical, plumbing, other
+    - speed_of_execution: Скорость исполнения (необязательное). Варианты: advance_booking, quick_start, not_important
     - additional_info: Дополнительная информация (необязательное)
     - data_processing_consent: Согласие на обработку данных (обязательное, boolean)
     - company_logo: Логотип компании (shaxsiy kabinet uchun) (необязательное, файл)
@@ -2505,6 +2523,17 @@ class RepairQuestionnaireListView(views.APIView):
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
         
+        # Категории (categories - JSONField, FilterChoicesView categories)
+        categories_param = request.query_params.get('categories') or request.query_params.get('category')
+        if categories_param:
+            categories_list = [c.strip() for c in categories_param.split(',')]
+            from django.db.models import Q
+            cat_q = Q()
+            for cat in categories_list:
+                cat_q |= Q(categories__contains=[cat])
+            if cat_q:
+                questionnaires = questionnaires.filter(cat_q)
+        
         # Выберете город (representative_cities - JSONField, contains check) + maxsus variantlar
         city = request.query_params.get('city')
         if city:
@@ -2577,16 +2606,10 @@ class RepairQuestionnaireListView(views.APIView):
             if cards_q:
                 questionnaires = questionnaires.filter(cards_q)
         
-        # Скорость исполнения (execution_speed - project_timelines ichida search)
+        # Скорость исполнения (execution_speed → speed_of_execution CharField)
         execution_speed = request.query_params.get('execution_speed')
         if execution_speed and execution_speed != 'not_important':
-            # Mapping: advance_booking -> "предварительная запись", quick_start -> "быстрый старт"
-            speed_mapping = {
-                'advance_booking': 'предварительная запись',
-                'quick_start': 'быстрый старт',
-            }
-            search_term = speed_mapping.get(execution_speed, execution_speed)
-            questionnaires = questionnaires.filter(project_timelines__icontains=search_term)
+            questionnaires = questionnaires.filter(speed_of_execution=execution_speed)
         
         # Условия сотрудничества (cooperation_terms ichida search)
         cooperation_terms = request.query_params.get('cooperation_terms')
@@ -3173,8 +3196,12 @@ class RepairQuestionnaireStatusUpdateView(views.APIView):
       * in_home - IN HOME
       * no - Нет
       * other - Другое
+    - categories: Категории (массив, необязательное). Варианты: supplier, exhibition_hall, factory, salon, other
+    - speed_of_execution: Скорость исполнения / сроки поставки (необязательное). Варианты: in_stock, up_to_2_weeks, up_to_1_month, up_to_3_months, not_important
     - data_processing_consent: Согласие на обработку данных (обязательное, boolean)
     - company_logo: Логотип компании (shaxsiy kabinet uchun) (необязательное, файл)
+    
+    GET и PUT принимают/возвращают те же поля.
     ''',
     request=SupplierQuestionnaireSerializer,
     responses={
@@ -3324,6 +3351,17 @@ class SupplierQuestionnaireListView(views.APIView):
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
         
+        # Категории (categories - JSONField, FilterChoicesView categories)
+        categories_param = request.query_params.get('categories') or request.query_params.get('category')
+        if categories_param:
+            categories_list = [c.strip() for c in categories_param.split(',')]
+            from django.db.models import Q
+            cat_q = Q()
+            for cat in categories_list:
+                cat_q |= Q(categories__contains=[cat])
+            if cat_q:
+                questionnaires = questionnaires.filter(cat_q)
+        
         # Выберете город (representative_cities - JSONField, contains check) + maxsus variantlar + ko'p tanlash
         city = request.query_params.get('city')
         if city:
@@ -3384,24 +3422,15 @@ class SupplierQuestionnaireListView(views.APIView):
             if cards_q:
                 questionnaires = questionnaires.filter(cards_q)
         
-        # Скорость исполнения (delivery_terms ichida search, ko'p tanlash mumkin)
+        # Скорость исполнения (execution_speed → speed_of_execution CharField)
         execution_speed = request.query_params.get('execution_speed')
         if execution_speed:
-            # Ko'p tanlash mumkin - vergul bilan ajratilgan
             speeds_list = [s.strip() for s in execution_speed.split(',')]
             from django.db.models import Q
             speed_q = Q()
             for speed in speeds_list:
                 if speed != 'not_important':
-                    # Mapping: in_stock -> "в наличии", up_to_2_weeks -> "2 недель", up_to_1_month -> "1 месяц", up_to_3_months -> "3 месяцев"
-                    speed_mapping = {
-                        'in_stock': 'в наличии',
-                        'up_to_2_weeks': '2 недель',
-                        'up_to_1_month': '1 месяц',
-                        'up_to_3_months': '3 месяцев',
-                    }
-                    search_term = speed_mapping.get(speed, speed)
-                    speed_q |= Q(delivery_terms__icontains=search_term)
+                    speed_q |= Q(speed_of_execution=speed)
             if speed_q:
                 questionnaires = questionnaires.filter(speed_q)
         

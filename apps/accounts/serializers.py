@@ -948,6 +948,24 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Список сегментов (multiple choice). Пример: ['horeca', 'business', 'premium']"
     )
     
+    categories = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Категории (multiple choice). Пример: ['residential_designer', 'decorator']"
+    )
+    
+    purpose_of_property = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Назначение недвижимости (multiple choice). Пример: ['permanent_residence', 'commercial']"
+    )
+    
+    area_of_object = serializers.IntegerField(required=False, allow_null=True, help_text="Площадь объекта в м²")
+    cost_per_m2 = serializers.IntegerField(required=False, allow_null=True, help_text="Стоимость за м² (руб)")
+    experience = serializers.IntegerField(required=False, allow_null=True, help_text="Опыт работы: 0=Новичок, 1=До 2 лет, 2=2-5 лет, 3=5-10 лет, 4=Свыше 10 лет")
+    
     def to_representation(self, instance):
         """Convert choice keys to display names in response"""
         data = super().to_representation(instance)
@@ -962,9 +980,23 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             choices_dict = dict(DesignerQuestionnaire.SEGMENT_CHOICES)
             data['segments'] = [choices_dict.get(segment, segment) for segment in data['segments']]
         
+        # Convert categories keys to display names
+        if 'categories' in data and data['categories'] is not None:
+            choices_dict = dict(DesignerQuestionnaire.CATEGORY_CHOICES)
+            data['categories'] = [choices_dict.get(c, c) for c in data['categories']]
+        
+        # Convert purpose_of_property keys to display names
+        if 'purpose_of_property' in data and data['purpose_of_property'] is not None:
+            choices_dict = dict(DesignerQuestionnaire.PURPOSE_OF_PROPERTY_CHOICES)
+            data['purpose_of_property'] = [choices_dict.get(p, p) for p in data['purpose_of_property']]
+        
         # Convert work_type key to display name
         if 'work_type' in data and data['work_type'] is not None:
             data['work_type'] = instance.get_work_type_display()
+        
+        # Convert experience key to display name
+        if 'experience' in data and data['experience'] is not None:
+            data['experience'] = instance.get_experience_display() if hasattr(instance, 'get_experience_display') else data['experience']
         
         # Convert vat_payment key to display name
         if 'vat_payment' in data and data['vat_payment'] is not None:
@@ -1034,6 +1066,11 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             'reviews_list',
             'data_processing_consent',
             'photo',
+            'categories',
+            'purpose_of_property',
+            'area_of_object',
+            'cost_per_m2',
+            'experience',
             'created_at',
             'updated_at',
         ]
@@ -1047,6 +1084,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             field: {'required': False} for field in [
                 'full_name', 'full_name_en', 'phone', 'birth_date', 'email', 'city',
                 'services', 'work_type', 'segments', 'unique_trade_proposal',
+                'categories', 'purpose_of_property', 'area_of_object', 'cost_per_m2', 'experience',
                 'vk', 'telegram_channel', 'pinterest', 'instagram', 'website',
                 'other_contacts', 'service_packages_description', 'vat_payment',
                 'supplier_contractor_recommendation_terms', 'additional_info',
@@ -1068,7 +1106,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
             # Multiple choice fields - vergul bilan ajratilgan stringlar
-            multiple_choice_fields = ['services', 'segments']
+            multiple_choice_fields = ['services', 'segments', 'categories', 'purpose_of_property']
             for field in multiple_choice_fields:
                 if field in data:
                     value = data.get(field)
@@ -1500,6 +1538,15 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
     )
     
+    categories = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Категории (multiple choice). Пример: ['repair_team', 'contractor']"
+    )
+    
+    speed_of_execution = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Скорость исполнения: advance_booking, quick_start, not_important")
+    
     def to_representation(self, instance):
         """Convert choice keys to display names in response"""
         data = super().to_representation(instance)
@@ -1509,9 +1556,18 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             choices_dict = dict(RepairQuestionnaire.SEGMENT_CHOICES)
             data['segments'] = [choices_dict.get(segment, segment) for segment in data['segments']]
         
+        # Convert categories keys to display names
+        if 'categories' in data and data['categories'] is not None:
+            choices_dict = dict(RepairQuestionnaire.CATEGORY_CHOICES)
+            data['categories'] = [choices_dict.get(c, c) for c in data['categories']]
+        
         # Convert business_form key to display name
         if 'business_form' in data and data['business_form'] is not None:
             data['business_form'] = instance.get_business_form_display()
+        
+        # Convert speed_of_execution key to display name
+        if 'speed_of_execution' in data and data['speed_of_execution'] is not None:
+            data['speed_of_execution'] = instance.get_speed_of_execution_display() if hasattr(instance, 'get_speed_of_execution_display') else data['speed_of_execution']
         
         # Convert magazine_cards keys to display names
         if 'magazine_cards' in data and data['magazine_cards'] is not None:
@@ -1582,6 +1638,8 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             'designer_supplier_terms',
             'magazine_cards',
             'magazine_cards_display',
+            'categories',
+            'speed_of_execution',
             'additional_info',
             'about_company',
             'terms_of_cooperation',
@@ -1603,7 +1661,7 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             field: {'required': False} for field in [
                 'full_name', 'phone', 'brand_name', 'email', 'responsible_person',
                 'representative_cities', 'business_form', 'work_list', 'welcome_message',
-                'cooperation_terms', 'project_timelines', 'segments', 'vk',
+                'cooperation_terms', 'project_timelines', 'segments', 'categories', 'speed_of_execution', 'vk',
                 'telegram_channel', 'pinterest', 'instagram', 'website', 'other_contacts',
                 'work_format', 'vat_payment', 'guarantees', 'designer_supplier_terms',
                 'magazine_cards', 'additional_info', 'data_processing_consent',
@@ -1623,8 +1681,8 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         """Parse JSON fields from form-data"""
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
-            # Multiple choice fields - segments, magazine_cards
-            multiple_choice_fields = ['segments', 'magazine_cards']
+            # Multiple choice fields - segments, magazine_cards, categories
+            multiple_choice_fields = ['segments', 'magazine_cards', 'categories']
             for field in multiple_choice_fields:
                 if field in data:
                     value = data.get(field)
@@ -2056,6 +2114,15 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Список карточек журналов (multiple choice). Пример: ['hi_home', 'in_home']"
     )
     
+    categories = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Категории (multiple choice). Пример: ['supplier', 'exhibition_hall']"
+    )
+    
+    speed_of_execution = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Скорость исполнения: in_stock, up_to_2_weeks, up_to_1_month, up_to_3_months, not_important")
+    
     def to_representation(self, instance):
         """Convert choice keys to display names in response"""
         data = super().to_representation(instance)
@@ -2065,9 +2132,18 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             choices_dict = dict(SupplierQuestionnaire.SEGMENT_CHOICES)
             data['segments'] = [choices_dict.get(segment, segment) for segment in data['segments']]
         
+        # Convert categories keys to display names
+        if 'categories' in data and data['categories'] is not None:
+            choices_dict = dict(SupplierQuestionnaire.CATEGORY_CHOICES)
+            data['categories'] = [choices_dict.get(c, c) for c in data['categories']]
+        
         # Convert business_form key to display name
         if 'business_form' in data and data['business_form'] is not None:
             data['business_form'] = instance.get_business_form_display()
+        
+        # Convert speed_of_execution key to display name
+        if 'speed_of_execution' in data and data['speed_of_execution'] is not None:
+            data['speed_of_execution'] = instance.get_speed_of_execution_display() if hasattr(instance, 'get_speed_of_execution_display') else data['speed_of_execution']
         
         # Convert magazine_cards keys to display names
         if 'magazine_cards' in data and data['magazine_cards'] is not None:
@@ -2137,6 +2213,8 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             'designer_contractor_terms',
             'magazine_cards',
             'magazine_cards_display',
+            'categories',
+            'speed_of_execution',
             'about_company',
             'terms_of_cooperation',
             'rating_count',
@@ -2157,7 +2235,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             field: {'required': False} for field in [
                 'full_name', 'phone', 'brand_name', 'email', 'responsible_person',
                 'representative_cities', 'business_form', 'product_assortment',
-                'welcome_message', 'cooperation_terms', 'segments', 'vk',
+                'welcome_message', 'cooperation_terms', 'segments', 'categories', 'speed_of_execution', 'vk',
                 'telegram_channel', 'pinterest', 'instagram', 'website', 'other_contacts',
                 'delivery_terms', 'vat_payment', 'guarantees', 'designer_contractor_terms',
                 'magazine_cards', 'data_processing_consent', 'company_logo', 'group',

@@ -272,6 +272,31 @@ class DesignerQuestionnaire(models.Model):
     """
     Анкета дизайнера
     """
+    CATEGORY_CHOICES = [
+        ('residential_designer', 'Дизайнер жилых помещений'),
+        ('commercial_designer', 'Дизайнер коммерческой недвижимости'),
+        ('decorator', 'Декоратор'),
+        ('home_stager', 'Хоумстейджер'),
+        ('architect', 'Архитектор'),
+        ('landscape_designer', 'Ландшафтный дизайнер'),
+        ('light_designer', 'Светодизайнер'),
+    ]
+    
+    PURPOSE_OF_PROPERTY_CHOICES = [
+        ('permanent_residence', 'Для постоянного проживания'),
+        ('for_rent', 'Для сдачи'),
+        ('commercial', 'Коммерческая недвижимость'),
+        ('horeca', 'HoReCa'),
+    ]
+    
+    EXPERIENCE_CHOICES = [
+        (0, 'Новичок'),
+        (1, 'До 2 лет'),
+        (2, '2-5 лет'),
+        (3, '5-10 лет'),
+        (4, 'Свыше 10 лет'),
+    ]
+    
     SERVICES_CHOICES = [
         ('author_supervision', 'Авторский надзор'),
         ('architecture', 'Архитектура'),
@@ -492,6 +517,42 @@ class DesignerQuestionnaire(models.Model):
         verbose_name='Прикрепите ваше фото для личного кабинета'
     )
     
+    # Категории (multiple choice)
+    categories = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Категории'
+    )
+    
+    # Назначение недвижимости (multiple choice)
+    purpose_of_property = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Назначение недвижимости'
+    )
+    
+    # Площадь объекта (м²)
+    area_of_object = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name='Площадь объекта (м²)'
+    )
+    
+    # Стоимость за м² (руб)
+    cost_per_m2 = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name='Стоимость за м² (руб)'
+    )
+    
+    # Опыт работы (0=Новичок, 1=До 2 лет, 2=2-5 лет, 3=5-10 лет, 4=Свыше 10 лет)
+    experience = models.IntegerField(
+        blank=True,
+        null=True,
+        choices=EXPERIENCE_CHOICES,
+        verbose_name='Опыт работы'
+    )
+    
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Дата создания'
@@ -551,6 +612,21 @@ class RepairQuestionnaire(models.Model):
         ('in_home', 'IN HOME'),
         ('no', 'Нет'),
         ('other', 'Другое'),
+    ]
+    
+    CATEGORY_CHOICES = [
+        ('repair_team', 'Ремонтная бригада'),
+        ('contractor', 'Подрядчик'),
+        ('finishing', 'Отделочные работы'),
+        ('electrical', 'Электромонтаж'),
+        ('plumbing', 'Сантехника'),
+        ('other', 'Другое'),
+    ]
+    
+    SPEED_OF_EXECUTION_CHOICES = [
+        ('advance_booking', 'Предварительная запись'),
+        ('quick_start', 'Быстрый старт'),
+        ('not_important', 'Не важно'),
     ]
     
     # Группа
@@ -725,6 +801,22 @@ class RepairQuestionnaire(models.Model):
         verbose_name='Выдаёте ли вы карточки журналов при рекомендации при заключении договора?'
     )
     
+    # Категории (multiple choice)
+    categories = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Категории'
+    )
+    
+    # Скорость исполнения
+    speed_of_execution = models.CharField(
+        max_length=30,
+        choices=SPEED_OF_EXECUTION_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name='Скорость исполнения'
+    )
+    
     # Дополнительная информация
     additional_info = models.TextField(
         blank=True,
@@ -804,6 +896,22 @@ class SupplierQuestionnaire(models.Model):
         ('in_home', 'IN HOME'),
         ('no', 'Нет'),
         ('other', 'Другое'),
+    ]
+    
+    CATEGORY_CHOICES = [
+        ('supplier', 'Поставщик'),
+        ('exhibition_hall', 'Выставочный зал'),
+        ('factory', 'Фабрика'),
+        ('salon', 'Салон'),
+        ('other', 'Другое'),
+    ]
+    
+    SPEED_OF_EXECUTION_CHOICES = [
+        ('in_stock', 'В наличии'),
+        ('up_to_2_weeks', 'До 2х недель'),
+        ('up_to_1_month', 'До 1 месяца'),
+        ('up_to_3_months', 'До 3х месяцев'),
+        ('not_important', 'Не важно'),
     ]
     
     # Группа
@@ -963,6 +1071,22 @@ class SupplierQuestionnaire(models.Model):
         default=list,
         blank=True,
         verbose_name='Выдаёте ли вы карточки журналов при покупке продукции?'
+    )
+    
+    # Категории (multiple choice)
+    categories = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Категории'
+    )
+    
+    # Скорость исполнения / сроки поставки
+    speed_of_execution = models.CharField(
+        max_length=30,
+        choices=SPEED_OF_EXECUTION_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name='Скорость исполнения'
     )
     
     # Согласие на обработку данных
