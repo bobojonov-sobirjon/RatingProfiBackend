@@ -12,10 +12,54 @@ from django.utils.crypto import get_random_string
 from django.utils import timezone
 from datetime import timedelta
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
-from .models import SMSVerificationCode, DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire, MediaQuestionnaire
+from .models import (
+    SMSVerificationCode,
+    DesignerQuestionnaire,
+    RepairQuestionnaire,
+    SupplierQuestionnaire,
+    MediaQuestionnaire,
+    QUESTIONNAIRE_GROUP_CHOICES,
+)
 from .utils import send_sms_via_smsaero, generate_sms_code
 
 User = get_user_model()
+
+
+def _choice_display_to_key_list(data, field_name, choices_tuples):
+    """Convert list field values from display names to keys (PUT: frontend sends display names)."""
+    if field_name not in data and not (hasattr(data, 'getlist') and data.getlist(field_name)):
+        return
+    rev = {str(label): key for key, label in choices_tuples}
+    if hasattr(data, 'getlist'):
+        vals = data.getlist(field_name)
+    else:
+        v = data.get(field_name)
+        vals = v if isinstance(v, list) else ([v] if v is not None and v != '' else [])
+    if not vals:
+        return
+    converted = [rev.get(str(item).strip(), item) for item in vals]
+    if hasattr(data, '_mutable') and not data._mutable:
+        data._mutable = True
+    if hasattr(data, 'setlist'):
+        data.setlist(field_name, converted)
+    else:
+        data[field_name] = converted
+
+
+def _choice_display_to_key_single(data, field_name, choices_tuples):
+    """Convert single choice field from display name to key (PUT: frontend sends display name)."""
+    if hasattr(data, 'getlist'):
+        v = data.getlist(field_name)
+        val = v[0] if v else None
+    else:
+        val = data.get(field_name)
+    if val is None or (isinstance(val, str) and val.strip() == ''):
+        return
+    rev = {str(label): key for key, label in choices_tuples}
+    converted = rev.get(str(val).strip(), val)
+    if hasattr(data, '_mutable') and not data._mutable:
+        data._mutable = True
+    data[field_name] = converted
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -1242,6 +1286,17 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                     elif isinstance(file_value, (InMemoryUploadedFile, TemporaryUploadedFile)):
                         # File obyektni o'zgartirmaymiz, to'g'ridan-to'g'ri o'tkazib yuboramiz
                         pass
+            
+            # PUT: frontend display name yuboradi, key ga aylantirish
+            _choice_display_to_key_list(data, 'services', DesignerQuestionnaire.SERVICES_CHOICES)
+            _choice_display_to_key_list(data, 'segments', DesignerQuestionnaire.SEGMENT_CHOICES)
+            _choice_display_to_key_list(data, 'categories', DesignerQuestionnaire.CATEGORY_CHOICES)
+            _choice_display_to_key_list(data, 'purpose_of_property', DesignerQuestionnaire.PURPOSE_OF_PROPERTY_CHOICES)
+            _choice_display_to_key_single(data, 'work_type', DesignerQuestionnaire.WORK_TYPE_CHOICES)
+            _choice_display_to_key_single(data, 'experience', DesignerQuestionnaire.EXPERIENCE_CHOICES)
+            _choice_display_to_key_single(data, 'vat_payment', DesignerQuestionnaire.VAT_PAYMENT_CHOICES)
+            _choice_display_to_key_single(data, 'status', DesignerQuestionnaire.STATUS_CHOICES)
+            _choice_display_to_key_single(data, 'group', QUESTIONNAIRE_GROUP_CHOICES)
         return super().to_internal_value(data)
     
     def validate_services(self, value):
@@ -1817,6 +1872,16 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
                     elif isinstance(file_value, (InMemoryUploadedFile, TemporaryUploadedFile)):
                         # File obyektni o'zgartirmaymiz, to'g'ridan-to'g'ri o'tkazib yuboramiz
                         pass
+            
+            # PUT: frontend display name yuboradi, key ga aylantirish
+            _choice_display_to_key_list(data, 'segments', RepairQuestionnaire.SEGMENT_CHOICES)
+            _choice_display_to_key_list(data, 'magazine_cards', RepairQuestionnaire.MAGAZINE_CARD_CHOICES)
+            _choice_display_to_key_list(data, 'categories', RepairQuestionnaire.CATEGORY_CHOICES)
+            _choice_display_to_key_single(data, 'business_form', RepairQuestionnaire.BUSINESS_FORM_CHOICES)
+            _choice_display_to_key_single(data, 'speed_of_execution', RepairQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
+            _choice_display_to_key_single(data, 'vat_payment', RepairQuestionnaire.VAT_PAYMENT_CHOICES)
+            _choice_display_to_key_single(data, 'status', RepairQuestionnaire.STATUS_CHOICES)
+            _choice_display_to_key_single(data, 'group', QUESTIONNAIRE_GROUP_CHOICES)
         
         return super().to_internal_value(data)
     
@@ -2392,6 +2457,16 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                     elif isinstance(file_value, (InMemoryUploadedFile, TemporaryUploadedFile)):
                         # File obyektni o'zgartirmaymiz, to'g'ridan-to'g'ri o'tkazib yuboramiz
                         pass
+            
+            # PUT: frontend display name yuboradi, key ga aylantirish
+            _choice_display_to_key_list(data, 'segments', SupplierQuestionnaire.SEGMENT_CHOICES)
+            _choice_display_to_key_list(data, 'magazine_cards', SupplierQuestionnaire.MAGAZINE_CARD_CHOICES)
+            _choice_display_to_key_list(data, 'categories', SupplierQuestionnaire.CATEGORY_CHOICES)
+            _choice_display_to_key_single(data, 'business_form', SupplierQuestionnaire.BUSINESS_FORM_CHOICES)
+            _choice_display_to_key_single(data, 'speed_of_execution', SupplierQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
+            _choice_display_to_key_single(data, 'vat_payment', SupplierQuestionnaire.VAT_PAYMENT_CHOICES)
+            _choice_display_to_key_single(data, 'status', SupplierQuestionnaire.STATUS_CHOICES)
+            _choice_display_to_key_single(data, 'group', QUESTIONNAIRE_GROUP_CHOICES)
         return super().to_internal_value(data)
     
     def validate_segments(self, value):
@@ -2786,6 +2861,12 @@ class MediaQuestionnaireSerializer(serializers.ModelSerializer):
                     elif isinstance(file_value, (InMemoryUploadedFile, TemporaryUploadedFile)):
                         # File obyektni o'zgartirmaymiz, to'g'ridan-to'g'ri o'tkazib yuboramiz
                         pass
+            
+            # PUT: frontend display name yuboradi, key ga aylantirish
+            _choice_display_to_key_list(data, 'segments', MediaQuestionnaire.SEGMENT_CHOICES)
+            _choice_display_to_key_single(data, 'vat_payment', MediaQuestionnaire.VAT_PAYMENT_CHOICES)
+            _choice_display_to_key_single(data, 'status', MediaQuestionnaire.STATUS_CHOICES)
+            _choice_display_to_key_single(data, 'group', QUESTIONNAIRE_GROUP_CHOICES)
         return super().to_internal_value(data)
     
     def validate_segments(self, value):
