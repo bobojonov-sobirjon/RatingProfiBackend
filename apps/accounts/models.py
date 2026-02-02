@@ -289,12 +289,29 @@ class DesignerQuestionnaire(models.Model):
         ('horeca', 'HoReCa'),
     ]
     
+    # Площадь объекта — текстовие варианты (не число)
+    AREA_OF_OBJECT_CHOICES = [
+        ('до 10 м2', 'до 10 м2'),
+        ('до 40 м 2', 'до 40 м 2'),
+        ('до 80 м 2', 'до 80 м 2'),
+        ('дома', 'дома'),
+    ]
+    
+    # Стоимость за м² — текстовие варианты (не число)
+    COST_PER_M2_CHOICES = [
+        ('До 1500 р', 'До 1500 р'),
+        ('до 2500р', 'до 2500р'),
+        ('до 4000 р', 'до 4000 р'),
+        ('свыше 4000 р', 'свыше 4000 р'),
+    ]
+    
+    # Опыт работы — текстовие варианты (не число)
     EXPERIENCE_CHOICES = [
-        (0, 'Новичок'),
-        (1, 'До 2 лет'),
-        (2, '2-5 лет'),
-        (3, '5-10 лет'),
-        (4, 'Свыше 10 лет'),
+        ('Новичок', 'Новичок'),
+        ('До 2 лет', 'До 2 лет'),
+        ('2-5 лет', '2-5 лет'),
+        ('5-10 лет', '5-10 лет'),
+        ('Свыше 10 лет', 'Свыше 10 лет'),
     ]
     
     SERVICES_CHOICES = [
@@ -532,21 +549,27 @@ class DesignerQuestionnaire(models.Model):
     )
     
     # Площадь объекта (м²)
-    area_of_object = models.IntegerField(
+    # Площадь объекта — текстовие варианты (до 10 м2, до 40 м 2, до 80 м 2, дома)
+    area_of_object = models.CharField(
+        max_length=50,
         blank=True,
         null=True,
-        verbose_name='Площадь объекта (м²)'
+        choices=AREA_OF_OBJECT_CHOICES,
+        verbose_name='Площадь объекта'
     )
     
-    # Стоимость за м² (руб)
-    cost_per_m2 = models.IntegerField(
+    # Стоимость за м² — текстовие варианты (До 1500 р, до 2500р, до 4000 р, свыше 4000 р)
+    cost_per_m2 = models.CharField(
+        max_length=50,
         blank=True,
         null=True,
-        verbose_name='Стоимость за м² (руб)'
+        choices=COST_PER_M2_CHOICES,
+        verbose_name='Стоимость за м²'
     )
     
-    # Опыт работы (0=Новичок, 1=До 2 лет, 2=2-5 лет, 3=5-10 лет, 4=Свыше 10 лет)
-    experience = models.IntegerField(
+    # Опыт работы — текстовие варианты (Новичок, До 2 лет, 2-5 лет, 5-10 лет, Свыше 10 лет)
+    experience = models.CharField(
+        max_length=50,
         blank=True,
         null=True,
         choices=EXPERIENCE_CHOICES,

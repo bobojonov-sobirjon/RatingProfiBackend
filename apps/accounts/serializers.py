@@ -1006,9 +1006,9 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Назначение недвижимости (multiple choice). Пример: ['permanent_residence', 'commercial']"
     )
     
-    area_of_object = serializers.IntegerField(required=False, allow_null=True, help_text="Площадь объекта в м²")
-    cost_per_m2 = serializers.IntegerField(required=False, allow_null=True, help_text="Стоимость за м² (руб)")
-    experience = serializers.IntegerField(required=False, allow_null=True, help_text="Опыт работы: 0=Новичок, 1=До 2 лет, 2=2-5 лет, 3=5-10 лет, 4=Свыше 10 лет")
+    area_of_object = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Площадь объекта: до 10 м2, до 40 м 2, до 80 м 2, дома")
+    cost_per_m2 = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Стоимость за м²: До 1500 р, до 2500р, до 4000 р, свыше 4000 р")
+    experience = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Опыт работы: Новичок, До 2 лет, 2-5 лет, 5-10 лет, Свыше 10 лет")
     
     def to_representation(self, instance):
         """Convert choice keys to display names in response"""
@@ -1038,9 +1038,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         if 'work_type' in data and data['work_type'] is not None:
             data['work_type'] = instance.get_work_type_display()
         
-        # Convert experience key to display name
-        if 'experience' in data and data['experience'] is not None:
-            data['experience'] = instance.get_experience_display() if hasattr(instance, 'get_experience_display') else data['experience']
+        # experience, area_of_object, cost_per_m2 — уже строки (текстовие варианты), возвращаем как есть
         
         # Convert vat_payment key to display name
         if 'vat_payment' in data and data['vat_payment'] is not None:
@@ -1293,6 +1291,8 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             _choice_display_to_key_list(data, 'categories', DesignerQuestionnaire.CATEGORY_CHOICES)
             _choice_display_to_key_list(data, 'purpose_of_property', DesignerQuestionnaire.PURPOSE_OF_PROPERTY_CHOICES)
             _choice_display_to_key_single(data, 'work_type', DesignerQuestionnaire.WORK_TYPE_CHOICES)
+            _choice_display_to_key_single(data, 'area_of_object', DesignerQuestionnaire.AREA_OF_OBJECT_CHOICES)
+            _choice_display_to_key_single(data, 'cost_per_m2', DesignerQuestionnaire.COST_PER_M2_CHOICES)
             _choice_display_to_key_single(data, 'experience', DesignerQuestionnaire.EXPERIENCE_CHOICES)
             _choice_display_to_key_single(data, 'vat_payment', DesignerQuestionnaire.VAT_PAYMENT_CHOICES)
             _choice_display_to_key_single(data, 'status', DesignerQuestionnaire.STATUS_CHOICES)

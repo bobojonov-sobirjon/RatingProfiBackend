@@ -1435,9 +1435,9 @@ class UserPublicProfileView(views.APIView):
     - photo: Прикрепите ваше фото для личного кабинета (необязательное, файл)
     - categories: Категории (массив, необязательное). Варианты: residential_designer, commercial_designer, decorator, home_stager, architect, landscape_designer, light_designer
     - purpose_of_property: Назначение недвижимости (массив, необязательное). Варианты: permanent_residence, for_rent, commercial, horeca
-    - area_of_object: Площадь объекта в м² (целое число, необязательное)
-    - cost_per_m2: Стоимость за м² в руб (целое число, необязательное)
-    - experience: Опыт работы (целое число, необязательное). 0=Новичок, 1=До 2 лет, 2=2-5 лет, 3=5-10 лет, 4=Свыше 10 лет
+    - area_of_object: Площадь объекта (текст: до 10 м2, до 40 м 2, до 80 м 2, дома)
+    - cost_per_m2: Стоимость за м² (текст: До 1500 р, до 2500р, до 4000 р, свыше 4000 р)
+    - experience: Опыт работы (текст: Новичок, До 2 лет, 2-5 лет, 5-10 лет, Свыше 10 лет)
     
     GET возвращает те же поля; PUT принимает те же поля для обновления.
     ''',
@@ -1628,47 +1628,39 @@ class DesignerQuestionnaireListView(views.APIView):
             if purpose_q:
                 questionnaires = questionnaires.filter(purpose_q)
         
-        # Площадь объекта (object_area → area_of_object IntegerField yoki service_packages_description fallback)
+        # Площадь объекта (object_area → area_of_object CharField, текстовие варианты)
         object_area = request.query_params.get('object_area')
         if object_area:
             areas_list = [a.strip() for a in object_area.split(',')]
             from django.db.models import Q
             area_q = Q()
-            # area_of_object (integer) bo'yicha: up_to_10m2 -> <=10, up_to_40m2 -> <=40, up_to_80m2 -> <=80
-            area_max = {'up_to_10m2': 10, 'up_to_40m2': 40, 'up_to_80m2': 80}
+            area_values = ['до 10 м2', 'до 40 м 2', 'до 80 м 2', 'дома']
             for area in areas_list:
                 if area == 'not_important':
                     continue
-                if area in area_max:
-                    area_q |= Q(area_of_object__lte=area_max[area])
-                elif area == 'houses':
-                    area_q |= Q(service_packages_description__icontains='дом')
+                if area in area_values:
+                    area_q |= Q(area_of_object=area)
                 else:
                     area_q |= Q(service_packages_description__icontains=area)
             if area_q:
                 questionnaires = questionnaires.filter(area_q)
         
-        # Стоимость за м2 (cost_per_sqm → cost_per_m2 IntegerField)
+        # Стоимость за м2 (cost_per_sqm → cost_per_m2 CharField, текстовие варианты)
         cost_per_sqm = request.query_params.get('cost_per_sqm')
         if cost_per_sqm and cost_per_sqm != 'not_important':
             from django.db.models import Q
-            cost_mapping = {'up_to_1500': 1500, 'up_to_2500': 2500, 'up_to_4000': 4000, 'over_4000': 4000}
-            max_val = cost_mapping.get(cost_per_sqm)
-            if max_val is not None:
-                if cost_per_sqm == 'over_4000':
-                    questionnaires = questionnaires.filter(cost_per_m2__gte=max_val)
-                else:
-                    questionnaires = questionnaires.filter(cost_per_m2__lte=max_val)
+            cost_values = ['До 1500 р', 'до 2500р', 'до 4000 р', 'свыше 4000 р']
+            if cost_per_sqm in cost_values:
+                questionnaires = questionnaires.filter(cost_per_m2=cost_per_sqm)
             else:
                 questionnaires = questionnaires.filter(service_packages_description__icontains=cost_per_sqm)
         
-        # Опыт работы (experience → experience IntegerField: 0=Новичок, 1=До 2 лет, 2=2-5, 3=5-10, 4=Свыше 10)
+        # Опыт работы (experience → experience CharField, текстовие варианты)
         experience = request.query_params.get('experience')
         if experience and experience != 'not_important':
-            exp_mapping = {'beginner': 0, 'up_to_2_years': 1, '2_5_years': 2, '5_10_years': 3, 'over_10_years': 4}
-            exp_val = exp_mapping.get(experience)
-            if exp_val is not None:
-                questionnaires = questionnaires.filter(experience=exp_val)
+            exp_values = ['Новичок', 'До 2 лет', '2-5 лет', '5-10 лет', 'Свыше 10 лет']
+            if experience in exp_values:
+                questionnaires = questionnaires.filter(experience=experience)
             else:
                 questionnaires = questionnaires.filter(
                     django_models.Q(welcome_message__icontains=experience) |
@@ -1856,31 +1848,31 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
             {'value': 'horeca', 'label': 'Хорика'},
         ]
         
-        # Площадь объекта - Площадь объекта (ko'p tanlash mumkin)
+        # Площадь объекта — текстовие варианты (value = то, что хранится в БД и принимает PUT)
         object_areas = [
-            {'value': 'up_to_10m2', 'label': 'До 10 м²'},
-            {'value': 'up_to_40m2', 'label': 'До 40 м²'},
-            {'value': 'up_to_80m2', 'label': 'До 80 м²'},
-            {'value': 'houses', 'label': 'Дома'},
+            {'value': 'до 10 м2', 'label': 'до 10 м2'},
+            {'value': 'до 40 м 2', 'label': 'до 40 м 2'},
+            {'value': 'до 80 м 2', 'label': 'до 80 м 2'},
+            {'value': 'дома', 'label': 'дома'},
             {'value': 'not_important', 'label': 'Не важно'},
         ]
         
-        # Стоимость за м2 - Стоимость за м2
+        # Стоимость за м2 — текстовие варианты
         cost_per_sqm_options = [
-            {'value': 'up_to_1500', 'label': 'До 1500 р'},
-            {'value': 'up_to_2500', 'label': 'До 2500 р'},
-            {'value': 'up_to_4000', 'label': 'До 4000 р'},
-            {'value': 'over_4000', 'label': 'Свыше 4000 р'},
+            {'value': 'До 1500 р', 'label': 'До 1500 р'},
+            {'value': 'до 2500р', 'label': 'до 2500р'},
+            {'value': 'до 4000 р', 'label': 'до 4000 р'},
+            {'value': 'свыше 4000 р', 'label': 'свыше 4000 р'},
             {'value': 'not_important', 'label': 'Не важно'},
         ]
         
-        # Опыт работы - Опыт работы
+        # Опыт работы — текстовие варианты
         experience_options = [
-            {'value': 'beginner', 'label': 'Новичок'},
-            {'value': 'up_to_2_years', 'label': 'До 2 лет'},
-            {'value': '2_5_years', 'label': '2-5 лет'},
-            {'value': '5_10_years', 'label': '5-10 лет'},
-            {'value': 'over_10_years', 'label': 'Свыше 10 лет'},
+            {'value': 'Новичок', 'label': 'Новичок'},
+            {'value': 'До 2 лет', 'label': 'До 2 лет'},
+            {'value': '2-5 лет', 'label': '2-5 лет'},
+            {'value': '5-10 лет', 'label': '5-10 лет'},
+            {'value': 'Свыше 10 лет', 'label': 'Свыше 10 лет'},
         ]
         
         return Response({
