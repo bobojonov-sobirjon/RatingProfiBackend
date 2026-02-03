@@ -41,6 +41,9 @@ from .utils import send_sms_via_smsaero, generate_sms_code
 
 User = get_user_model()
 
+# Filter: frontend value (display) yuboradi, bazada key saqlanadi — display -> key
+SEGMENT_DISPLAY_TO_KEY = {label: key for key, label in DesignerQuestionnaire.SEGMENT_CHOICES}
+
 # Password reset tokenlarni saqlash uchun dict (production'da cache yoki DB ishlatish kerak)
 PASSWORD_RESET_TOKENS = {}
 
@@ -1486,7 +1489,7 @@ class DesignerQuestionnaireListView(views.APIView):
                 name='segment',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Выберите сегмент (economy, comfort, business, premium, horeca). Можно указать несколько через запятую',
+                description='Сегмент: key (horeca, business, comfort, premium, medium, economy) или value (HoReCa, Бизнес, Комфорт и т.д.). Несколько через запятую.',
                 required=False,
             ),
             OpenApiParameter(
@@ -1603,12 +1606,11 @@ class DesignerQuestionnaireListView(views.APIView):
                     django_models.Q(work_cities__icontains=city)
                 )
         
-        # Выберете сегмент (segments - JSONField, contains check, ko'p tanlash mumkin)
+        # Выберете сегмент (segments - JSONField). Qabul: key (horeca) yoki value (HoReCa)
         segment = request.query_params.get('segment')
         if segment:
-            # Agar bir nechta segment kelsa, ularni ajratib olamiz
             segments_list = [s.strip() for s in segment.split(',')]
-            # Har bir segment uchun filter qo'llaymiz
+            segments_list = [SEGMENT_DISPLAY_TO_KEY.get(seg, seg) for seg in segments_list]
             from django.db.models import Q
             segment_q = Q()
             for seg in segments_list:
@@ -2401,7 +2403,7 @@ class RepairQuestionnaireListView(views.APIView):
                 name='segment',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Выберите сегмент (economy, comfort, business, premium, horeca, exclusive). Можно указать несколько через запятую',
+                description='Сегмент: key (horeca, business, comfort, premium, medium, economy) или value (HoReCa, Бизнес и т.д.). Несколько через запятую.',
                 required=False,
             ),
             OpenApiParameter(
@@ -2552,11 +2554,11 @@ class RepairQuestionnaireListView(views.APIView):
                 # Oddiy shahar qidirish
                 questionnaires = questionnaires.filter(representative_cities__icontains=city)
         
-        # Выберете сегмент (segments - JSONField, contains check, ko'p tanlash mumkin)
+        # Выберете сегмент (segments - JSONField). Qabul: key (horeca) yoki value (HoReCa)
         segment = request.query_params.get('segment')
         if segment:
-            # Ko'p tanlash mumkin - vergul bilan ajratilgan
             segments_list = [s.strip() for s in segment.split(',')]
+            segments_list = [SEGMENT_DISPLAY_TO_KEY.get(seg, seg) for seg in segments_list]
             from django.db.models import Q
             segment_q = Q()
             for seg in segments_list:
@@ -3233,7 +3235,7 @@ class SupplierQuestionnaireListView(views.APIView):
                 name='segment',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Выберите сегмент (economy, comfort, business, premium, horeca, exclusive). Можно указать несколько через запятую',
+                description='Сегмент: key (horeca, business, comfort, premium, medium, economy) или value (HoReCa, Бизнес и т.д.). Несколько через запятую.',
                 required=False,
             ),
             OpenApiParameter(
@@ -3380,11 +3382,11 @@ class SupplierQuestionnaireListView(views.APIView):
             if city_q:
                 questionnaires = questionnaires.filter(city_q)
         
-        # Выберите сегмент (segments - JSONField, contains check, ko'p tanlash mumkin)
+        # Выберите сегмент (segments - JSONField). Qabul: key (horeca) yoki value (HoReCa)
         segment = request.query_params.get('segment')
         if segment:
-            # Ko'p tanlash mumkin - vergul bilan ajratilgan
             segments_list = [s.strip() for s in segment.split(',')]
+            segments_list = [SEGMENT_DISPLAY_TO_KEY.get(seg, seg) for seg in segments_list]
             from django.db.models import Q
             segment_q = Q()
             for seg in segments_list:
