@@ -36,13 +36,29 @@ from .serializers import (
     QuestionnaireStatusUpdateSerializer,
     GroupSerializer,
 )
-from .models import SMSVerificationCode, DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire, MediaQuestionnaire, Report
+from .models import (
+    SMSVerificationCode,
+    DesignerQuestionnaire,
+    RepairQuestionnaire,
+    SupplierQuestionnaire,
+    MediaQuestionnaire,
+    Report,
+    QUESTIONNAIRE_GROUP_CHOICES,
+)
 from .utils import send_sms_via_smsaero, generate_sms_code
 
 User = get_user_model()
 
 # Filter: frontend value (display) yuboradi, bazada key saqlanadi — display -> key
-SEGMENT_DISPLAY_TO_KEY = {label: key for key, label in DesignerQuestionnaire.SEGMENT_CHOICES}
+SEGMENT_DISPLAY_TO_KEY = {str(label): key for key, label in DesignerQuestionnaire.SEGMENT_CHOICES}
+
+
+def _choices_display_to_keys(values_list, choices_tuples):
+    """Frontend value (display) yuboradi — key ga o'giramiz. choices_tuples = [(key, display), ...]"""
+    if not values_list:
+        return values_list
+    display_to_key = {str(label): key for key, label in choices_tuples}
+    return [display_to_key.get(v.strip(), v.strip()) for v in values_list]
 
 # Password reset tokenlarni saqlash uchun dict (production'da cache yoki DB ishlatish kerak)
 PASSWORD_RESET_TOKENS = {}
@@ -52,12 +68,13 @@ PASSWORD_RESET_TOKENS = {}
     tags=['Authentification'],
     summary='Проверка телефона и отправка SMS',
     description='''
-    POST: Проверка телефона и отправка SMS кода
+    POST: Проверка телефона для входа. Работает только для зарегистрированных пользователей.
     
     Request body:
     - phone: Телефонный номер
     
-    Если is_phone_verified = False, отправляется SMS код.
+    Если пользователь с таким телефоном не найден в системе — возвращается ошибка (SMS не отправляется).
+    Если пользователь найден и is_phone_verified = False — отправляется SMS код.
     ''',
     request=CheckPhoneSerializer,
     responses={
@@ -77,20 +94,16 @@ class CheckPhoneView(views.APIView):
         if serializer.is_valid():
             phone = serializer.validated_data['phone']
             
-            # User topish yoki yaratish
+            # Login faqat CustomUser da mavjud bo'lgan telefon uchun. Yangi user yaratilmaydi.
             try:
                 user = User.objects.get(phone=phone)
             except User.DoesNotExist:
-                # Yangi user yaratish
-                user = User.objects.create_user(
-                    phone=phone,
-                    password=None,  # Parol keyinroq o'rnatiladi
-                    role='designer',  # Default role (keyinroq o'zgartiriladi)
-                    is_phone_verified=False,
-                    is_active=True,
+                return Response(
+                    {'phone': ['Номер телефона не найден / Доступ не подтверждён']},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Agar is_phone_verified False bo'lsa, SMS yuborish
+            # Agar is_phone_verified False bo'lsa, SMS yuborish (faqat mavjud user uchun)
             if not user.is_phone_verified:
                 # SMS kod yaratish
                 code = generate_sms_code()
@@ -1482,7 +1495,7 @@ class DesignerQuestionnaireListView(views.APIView):
                 name='city',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Выберете город (поиск в city или work_cities). Специальные значения: "По всей России", "ЮФО", "Любые города онлайн"',
+                description='Город(а). Несколько через запятую = AND: только анкеты, у которых есть ВСЕ выбранные города (city или work_cities). Спецзначения: "По всей России", "ЮФО", "Любые города онлайн"',
                 required=False,
             ),
             OpenApiParameter(
@@ -1560,16 +1573,24 @@ class DesignerQuestionnaireListView(views.APIView):
         else:
             questionnaires = DesignerQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
         
-        # Filtering
-        # Выберете основную котегорию (group)
+        # Filtering (frontend value yuboradi — key ga o'giramiz)
+        # Выберете основную котегорию (group) — несколько через запятую, OR
         group = request.query_params.get('group')
         if group:
-            questionnaires = questionnaires.filter(group=group)
+            groups_list = [g.strip() for g in group.split(',') if g.strip()]
+            groups_list = _choices_display_to_keys(groups_list, QUESTIONNAIRE_GROUP_CHOICES)
+            if groups_list:
+                from django.db.models import Q
+                group_q = Q()
+                for g in groups_list:
+                    group_q |= Q(group=g)
+                questionnaires = questionnaires.filter(group_q)
         
-        # Категории (categories - JSONField, FilterChoicesView categories)
+        # Категории (categories) — frontend value, key ga o'giramiz
         categories_param = request.query_params.get('categories') or request.query_params.get('category')
         if categories_param:
             categories_list = [c.strip() for c in categories_param.split(',')]
+            categories_list = _choices_display_to_keys(categories_list, DesignerQuestionnaire.CATEGORY_CHOICES)
             from django.db.models import Q
             cat_q = Q()
             for cat in categories_list:
@@ -1577,40 +1598,40 @@ class DesignerQuestionnaireListView(views.APIView):
             if cat_q:
                 questionnaires = questionnaires.filter(cat_q)
         
-        # Выберете город (city) - faqat a'zolar tomonidan e'lon qilingan shaharlar + maxsus variantlar
+        # Выберете город (city). Несколько через запятую = AND: только те, у кого есть ВСЕ выбранные города
         city = request.query_params.get('city')
         if city:
-            # Maxsus variantlar: "По всей России", "ЮФО", "Любые города онлайн"
-            if city == "По всей России":
-                # Barcha shaharlar - filter qo'llamaymiz
-                pass
-            elif city == "ЮФО":
-                # Janubiy Federal Okrug shaharlari
-                yfo_cities = ['Ростов-на-Дону', 'Краснодар', 'Сочи', 'Ставрополь', 'Волгоград', 'Астрахань']
+            cities_list = [c.strip() for c in city.split(',') if c.strip()]
+            if cities_list:
                 from django.db.models import Q
-                city_q = Q()
-                for yfo_city in yfo_cities:
-                    city_q |= Q(city__icontains=yfo_city) | Q(work_cities__icontains=yfo_city)
-                if city_q:
-                    questionnaires = questionnaires.filter(city_q)
-            elif city == "Любые города онлайн":
-                # Online ishlaydiganlar - cooperation_terms ichida "онлайн" yoki "online" qidirish
-                questionnaires = questionnaires.filter(
-                    django_models.Q(cooperation_terms__icontains='онлайн') | 
-                    django_models.Q(cooperation_terms__icontains='online')
-                )
-            else:
-                # Oddiy shahar qidirish
-                questionnaires = questionnaires.filter(
-                    django_models.Q(city__icontains=city) | 
-                    django_models.Q(work_cities__icontains=city)
-                )
+                # Специальные значения: если только "По всей России" — не фильтруем
+                normal_cities = [c for c in cities_list if c not in ("По всей России", "ЮФО", "Любые города онлайн")]
+                if "По всей России" in cities_list and not normal_cities:
+                    pass
+                elif "ЮФО" in cities_list and not normal_cities:
+                    yfo_cities = ['Ростов-на-Дону', 'Краснодар', 'Сочи', 'Ставрополь', 'Волгоград', 'Астрахань']
+                    city_q = Q()
+                    for yfo_city in yfo_cities:
+                        city_q |= Q(city__icontains=yfo_city) | Q(work_cities__icontains=yfo_city)
+                    if city_q:
+                        questionnaires = questionnaires.filter(city_q)
+                elif "Любые города онлайн" in cities_list and not normal_cities:
+                    questionnaires = questionnaires.filter(
+                        django_models.Q(cooperation_terms__icontains='онлайн') |
+                        django_models.Q(cooperation_terms__icontains='online')
+                    )
+                else:
+                    # AND: анкета должна содержать каждый из выбранных городов (city или work_cities)
+                    for city_item in normal_cities:
+                        questionnaires = questionnaires.filter(
+                            Q(city__icontains=city_item) | Q(work_cities__icontains=city_item)
+                        )
         
-        # Выберете сегмент (segments - JSONField). Qabul: key (horeca) yoki value (HoReCa)
+        # Сегмент — frontend value (HoReCa), key (horeca) ga o'giramiz
         segment = request.query_params.get('segment')
         if segment:
             segments_list = [s.strip() for s in segment.split(',')]
-            segments_list = [SEGMENT_DISPLAY_TO_KEY.get(seg, seg) for seg in segments_list]
+            segments_list = _choices_display_to_keys(segments_list, DesignerQuestionnaire.SEGMENT_CHOICES)
             from django.db.models import Q
             segment_q = Q()
             for seg in segments_list:
@@ -1618,10 +1639,11 @@ class DesignerQuestionnaireListView(views.APIView):
             if segment_q:
                 questionnaires = questionnaires.filter(segment_q)
         
-        # Назначение недвижимости (property_purpose → purpose_of_property JSONField)
+        # Назначение недвижимости (property_purpose) — frontend value, key ga o'giramiz
         property_purpose = request.query_params.get('property_purpose')
         if property_purpose:
             purposes_list = [p.strip() for p in property_purpose.split(',')]
+            purposes_list = _choices_display_to_keys(purposes_list, DesignerQuestionnaire.PURPOSE_OF_PROPERTY_CHOICES)
             from django.db.models import Q
             purpose_q = Q()
             for p in purposes_list:
@@ -1647,27 +1669,39 @@ class DesignerQuestionnaireListView(views.APIView):
             if area_q:
                 questionnaires = questionnaires.filter(area_q)
         
-        # Стоимость за м2 (cost_per_sqm → cost_per_m2 CharField, текстовие варианты)
+        # Стоимость за м2 (cost_per_sqm) — несколько через запятую, OR
         cost_per_sqm = request.query_params.get('cost_per_sqm')
-        if cost_per_sqm and cost_per_sqm != 'not_important':
-            from django.db.models import Q
+        if cost_per_sqm:
+            cost_list = [c.strip() for c in cost_per_sqm.split(',') if c.strip()]
             cost_values = ['До 1500 р', 'до 2500р', 'до 4000 р', 'свыше 4000 р']
-            if cost_per_sqm in cost_values:
-                questionnaires = questionnaires.filter(cost_per_m2=cost_per_sqm)
-            else:
-                questionnaires = questionnaires.filter(service_packages_description__icontains=cost_per_sqm)
+            from django.db.models import Q
+            cost_q = Q()
+            for c in cost_list:
+                if c == 'not_important':
+                    continue
+                if c in cost_values:
+                    cost_q |= Q(cost_per_m2=c)
+                else:
+                    cost_q |= Q(service_packages_description__icontains=c)
+            if cost_q:
+                questionnaires = questionnaires.filter(cost_q)
         
-        # Опыт работы (experience → experience CharField, текстовие варианты)
+        # Опыт работы (experience) — несколько через запятую, OR
         experience = request.query_params.get('experience')
-        if experience and experience != 'not_important':
+        if experience:
+            exp_list = [e.strip() for e in experience.split(',') if e.strip()]
             exp_values = ['Новичок', 'До 2 лет', '2-5 лет', '5-10 лет', 'Свыше 10 лет']
-            if experience in exp_values:
-                questionnaires = questionnaires.filter(experience=experience)
-            else:
-                questionnaires = questionnaires.filter(
-                    django_models.Q(welcome_message__icontains=experience) |
-                    django_models.Q(additional_info__icontains=experience)
-                )
+            from django.db.models import Q
+            exp_q = Q()
+            for e in exp_list:
+                if e == 'not_important':
+                    continue
+                if e in exp_values:
+                    exp_q |= Q(experience=e)
+                else:
+                    exp_q |= Q(welcome_message__icontains=e) | Q(additional_info__icontains=e)
+            if exp_q:
+                questionnaires = questionnaires.filter(exp_q)
         
         # Search by full_name
         search = request.query_params.get('search')
@@ -2396,7 +2430,7 @@ class RepairQuestionnaireListView(views.APIView):
                 name='city',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Выберете город (поиск в representative_cities). Специальные значения: "По всей России", "ЮФО", "Любые города онлайн"',
+                description='Город(а). Несколько через запятую = AND: только анкеты, у которых есть ВСЕ выбранные города (representative_cities). Спецзначения: "По всей России", "ЮФО", "Любые города онлайн"',
                 required=False,
             ),
             OpenApiParameter(
@@ -2517,10 +2551,11 @@ class RepairQuestionnaireListView(views.APIView):
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
         
-        # Категории (categories - JSONField, FilterChoicesView categories)
+        # Категории (categories) — frontend value, key ga o'giramiz
         categories_param = request.query_params.get('categories') or request.query_params.get('category')
         if categories_param:
             categories_list = [c.strip() for c in categories_param.split(',')]
+            categories_list = _choices_display_to_keys(categories_list, RepairQuestionnaire.CATEGORY_CHOICES)
             from django.db.models import Q
             cat_q = Q()
             for cat in categories_list:
@@ -2528,37 +2563,36 @@ class RepairQuestionnaireListView(views.APIView):
             if cat_q:
                 questionnaires = questionnaires.filter(cat_q)
         
-        # Выберете город (representative_cities - JSONField, contains check) + maxsus variantlar
+        # Выберете город (representative_cities). Несколько через запятую = AND
         city = request.query_params.get('city')
         if city:
-            # Maxsus variantlar: "По всей России", "ЮФО", "Любые города онлайн"
-            if city == "По всей России":
-                # Barcha shaharlar - filter qo'llamaymiz
-                pass
-            elif city == "ЮФО":
-                # Janubiy Federal Okrug shaharlari
-                yfo_cities = ['Ростов-на-Дону', 'Краснодар', 'Сочи', 'Ставрополь', 'Волгоград', 'Астрахань']
+            cities_list = [c.strip() for c in city.split(',') if c.strip()]
+            if cities_list:
                 from django.db.models import Q
-                city_q = Q()
-                for yfo_city in yfo_cities:
-                    city_q |= Q(representative_cities__icontains=yfo_city)
-                if city_q:
-                    questionnaires = questionnaires.filter(city_q)
-            elif city == "Любые города онлайн":
-                # Online ishlaydiganlar - cooperation_terms ichida "онлайн" yoki "online" qidirish
-                questionnaires = questionnaires.filter(
-                    django_models.Q(cooperation_terms__icontains='онлайн') | 
-                    django_models.Q(cooperation_terms__icontains='online')
-                )
-            else:
-                # Oddiy shahar qidirish
-                questionnaires = questionnaires.filter(representative_cities__icontains=city)
+                normal_cities = [c for c in cities_list if c not in ("По всей России", "ЮФО", "Любые города онлайн")]
+                if "По всей России" in cities_list and not normal_cities:
+                    pass
+                elif "ЮФО" in cities_list and not normal_cities:
+                    yfo_cities = ['Ростов-на-Дону', 'Краснодар', 'Сочи', 'Ставрополь', 'Волгоград', 'Астрахань']
+                    city_q = Q()
+                    for yfo_city in yfo_cities:
+                        city_q |= Q(representative_cities__icontains=yfo_city)
+                    if city_q:
+                        questionnaires = questionnaires.filter(city_q)
+                elif "Любые города онлайн" in cities_list and not normal_cities:
+                    questionnaires = questionnaires.filter(
+                        django_models.Q(cooperation_terms__icontains='онлайн') |
+                        django_models.Q(cooperation_terms__icontains='online')
+                    )
+                else:
+                    for city_item in normal_cities:
+                        questionnaires = questionnaires.filter(representative_cities__icontains=city_item)
         
-        # Выберете сегмент (segments - JSONField). Qabul: key (horeca) yoki value (HoReCa)
+        # Сегмент — frontend value (HoReCa), key (horeca) ga o'giramiz
         segment = request.query_params.get('segment')
         if segment:
             segments_list = [s.strip() for s in segment.split(',')]
-            segments_list = [SEGMENT_DISPLAY_TO_KEY.get(seg, seg) for seg in segments_list]
+            segments_list = _choices_display_to_keys(segments_list, RepairQuestionnaire.SEGMENT_CHOICES)
             from django.db.models import Q
             segment_q = Q()
             for seg in segments_list:
@@ -2566,86 +2600,118 @@ class RepairQuestionnaireListView(views.APIView):
             if segment_q:
                 questionnaires = questionnaires.filter(segment_q)
         
-        # Наличие НДС (vat_payment) - ko'p tanlash mumkin
+        # Наличие НДС (vat_payment) — frontend value (Да/Нет), key (yes/no) ga o'giramiz
         vat_payment = request.query_params.get('vat_payment')
         if vat_payment:
-            # Ko'p tanlash mumkin - vergul bilan ajratilgan
             vat_list = [v.strip() for v in vat_payment.split(',')]
+            vat_list = _choices_display_to_keys(vat_list, RepairQuestionnaire.VAT_PAYMENT_CHOICES)
             from django.db.models import Q
             vat_q = Q()
             for vat in vat_list:
                 if vat == 'not_important':
-                    # "не важно" - filter qo'llamaymiz
                     pass
-                elif vat == 'yes':
-                    vat_q |= Q(vat_payment='yes')
-                elif vat == 'no':
-                    vat_q |= Q(vat_payment='no')
+                elif vat in ('yes', 'no'):
+                    vat_q |= Q(vat_payment=vat)
             if vat_q:
                 questionnaires = questionnaires.filter(vat_q)
         
-        # Карточки журналов (magazine_cards) - ko'p tanlash mumkin
+        # Карточки журналов (magazine_cards) — frontend value, key ga o'giramiz
         magazine_cards = request.query_params.get('magazine_cards')
         if magazine_cards:
-            # Ko'p tanlash mumkin - vergul bilan ajratilgan
             cards_list = [c.strip() for c in magazine_cards.split(',')]
+            cards_list = _choices_display_to_keys(cards_list, RepairQuestionnaire.MAGAZINE_CARD_CHOICES)
             from django.db.models import Q
             cards_q = Q()
             for card in cards_list:
                 if card == 'not_important':
-                    # "не важно" - filter qo'llamaymiz
                     pass
                 else:
-                    cards_q |= Q(magazine_cards=card)
+                    cards_q |= Q(magazine_cards__contains=[card])
             if cards_q:
                 questionnaires = questionnaires.filter(cards_q)
         
-        # Скорость исполнения (execution_speed → speed_of_execution CharField)
+        # Скорость исполнения (execution_speed) — frontend value, key ga o'giramiz
         execution_speed = request.query_params.get('execution_speed')
-        if execution_speed and execution_speed != 'not_important':
-            questionnaires = questionnaires.filter(speed_of_execution=execution_speed)
+        if execution_speed:
+            speeds_list = [s.strip() for s in execution_speed.split(',') if s.strip()]
+            speeds_list = _choices_display_to_keys(speeds_list, RepairQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
+            from django.db.models import Q
+            speed_q = Q()
+            for s in speeds_list:
+                if s != 'not_important':
+                    speed_q |= Q(speed_of_execution=s)
+            if speed_q:
+                questionnaires = questionnaires.filter(speed_q)
         
-        # Условия сотрудничества (cooperation_terms ichida search)
+        # Условия сотрудничества (cooperation_terms) — несколько через запятую, OR
         cooperation_terms = request.query_params.get('cooperation_terms')
-        if cooperation_terms and cooperation_terms != 'not_important':
-            # Mapping: up_to_5_percent -> "5%", up_to_10_percent -> "10%"
-            terms_mapping = {
-                'up_to_5_percent': '5%',
-                'up_to_10_percent': '10%',
-            }
-            search_term = terms_mapping.get(cooperation_terms, cooperation_terms)
-            questionnaires = questionnaires.filter(cooperation_terms__icontains=search_term)
+        if cooperation_terms:
+            terms_list = [t.strip() for t in cooperation_terms.split(',') if t.strip()]
+            terms_mapping = {'up_to_5_percent': '5%', 'up_to_10_percent': '10%'}
+            from django.db.models import Q
+            terms_q = Q()
+            for t in terms_list:
+                if t != 'not_important':
+                    search_term = terms_mapping.get(t, t)
+                    terms_q |= Q(cooperation_terms__icontains=search_term)
+            if terms_q:
+                questionnaires = questionnaires.filter(terms_q)
         
-        # Назначение недвижимости (property_purpose - work_list ichida search)
+        # Назначение недвижимости (property_purpose) — несколько через запятую, OR
         property_purpose = request.query_params.get('property_purpose')
         if property_purpose:
-            questionnaires = questionnaires.filter(work_list__icontains=property_purpose)
+            purposes_list = [p.strip() for p in property_purpose.split(',') if p.strip()]
+            from django.db.models import Q
+            purpose_q = Q()
+            for p in purposes_list:
+                purpose_q |= Q(work_list__icontains=p)
+            if purpose_q:
+                questionnaires = questionnaires.filter(purpose_q)
         
-        # Площадь объекта (object_area - project_timelines ichida search)
+        # Площадь объекта (object_area) — несколько через запятую, OR
         object_area = request.query_params.get('object_area')
         if object_area:
-            questionnaires = questionnaires.filter(project_timelines__icontains=object_area)
+            areas_list = [a.strip() for a in object_area.split(',') if a.strip()]
+            from django.db.models import Q
+            area_q = Q()
+            for a in areas_list:
+                area_q |= Q(project_timelines__icontains=a)
+            if area_q:
+                questionnaires = questionnaires.filter(area_q)
         
-        # Стоимость за м2 (cost_per_sqm - work_format yoki guarantees ichida search)
+        # Стоимость за м2 (cost_per_sqm) — несколько через запятую, OR
         cost_per_sqm = request.query_params.get('cost_per_sqm')
         if cost_per_sqm:
-            questionnaires = questionnaires.filter(
-                django_models.Q(work_format__icontains=cost_per_sqm) | 
-                django_models.Q(guarantees__icontains=cost_per_sqm)
-            )
+            cost_list = [c.strip() for c in cost_per_sqm.split(',') if c.strip()]
+            from django.db.models import Q
+            cost_q = Q()
+            for c in cost_list:
+                cost_q |= Q(work_format__icontains=c) | Q(guarantees__icontains=c)
+            if cost_q:
+                questionnaires = questionnaires.filter(cost_q)
         
-        # Опыт работы (experience - welcome_message yoki additional_info ichida search)
+        # Опыт работы (experience) — несколько через запятую, OR
         experience = request.query_params.get('experience')
         if experience:
-            questionnaires = questionnaires.filter(
-                django_models.Q(welcome_message__icontains=experience) | 
-                django_models.Q(additional_info__icontains=experience)
-            )
+            exp_list = [e.strip() for e in experience.split(',') if e.strip()]
+            from django.db.models import Q
+            exp_q = Q()
+            for e in exp_list:
+                exp_q |= Q(welcome_message__icontains=e) | Q(additional_info__icontains=e)
+            if exp_q:
+                questionnaires = questionnaires.filter(exp_q)
         
-        # Форма бизнеса (business_form)
+        # Форма бизнеса (business_form) — frontend value, key ga o'giramiz
         business_form = request.query_params.get('business_form')
         if business_form:
-            questionnaires = questionnaires.filter(business_form=business_form)
+            forms_list = [f.strip() for f in business_form.split(',') if f.strip()]
+            forms_list = _choices_display_to_keys(forms_list, RepairQuestionnaire.BUSINESS_FORM_CHOICES)
+            if forms_list:
+                from django.db.models import Q
+                form_q = Q()
+                for f in forms_list:
+                    form_q |= Q(business_form=f)
+                questionnaires = questionnaires.filter(form_q)
         
         # Search by full_name or brand_name
         search = request.query_params.get('search')
@@ -3228,7 +3294,7 @@ class SupplierQuestionnaireListView(views.APIView):
                 name='city',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Выберете город (поиск в representative_cities). Специальные значения: "По всей России", "ЮФО", "Любые города онлайн". Можно указать несколько через запятую',
+                description='Город(а). Несколько через запятую = AND: только анкеты, у которых есть ВСЕ выбранные города (representative_cities). Спецзначения: "По всей России", "ЮФО", "Любые города онлайн"',
                 required=False,
             ),
             OpenApiParameter(
@@ -3345,10 +3411,11 @@ class SupplierQuestionnaireListView(views.APIView):
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
         
-        # Категории (categories - JSONField, FilterChoicesView categories)
+        # Категории (categories) — frontend value, key ga o'giramiz
         categories_param = request.query_params.get('categories') or request.query_params.get('category')
         if categories_param:
             categories_list = [c.strip() for c in categories_param.split(',')]
+            categories_list = _choices_display_to_keys(categories_list, SupplierQuestionnaire.CATEGORY_CHOICES)
             from django.db.models import Q
             cat_q = Q()
             for cat in categories_list:
@@ -3356,37 +3423,35 @@ class SupplierQuestionnaireListView(views.APIView):
             if cat_q:
                 questionnaires = questionnaires.filter(cat_q)
         
-        # Выберете город (representative_cities - JSONField, contains check) + maxsus variantlar + ko'p tanlash
+        # Выберете город (representative_cities). Несколько через запятую = AND
         city = request.query_params.get('city')
         if city:
-            # Ko'p tanlash mumkin - vergul bilan ajratilgan
-            cities_list = [c.strip() for c in city.split(',')]
-            from django.db.models import Q
-            city_q = Q()
-            for city_item in cities_list:
-                # Maxsus variantlar: "По всей России", "ЮФО", "Любые города онлайн"
-                if city_item == "По всей России":
-                    # Barcha shaharlar - filter qo'llamaymiz
+            cities_list = [c.strip() for c in city.split(',') if c.strip()]
+            if cities_list:
+                from django.db.models import Q
+                normal_cities = [c for c in cities_list if c not in ("По всей России", "ЮФО", "Любые города онлайн")]
+                if "По всей России" in cities_list and not normal_cities:
                     pass
-                elif city_item == "ЮФО":
-                    # Janubiy Federal Okrug shaharlari
+                elif "ЮФО" in cities_list and not normal_cities:
                     yfo_cities = ['Ростов-на-Дону', 'Краснодар', 'Сочи', 'Ставрополь', 'Волгоград', 'Астрахань']
+                    city_q = Q()
                     for yfo_city in yfo_cities:
                         city_q |= Q(representative_cities__icontains=yfo_city)
-                elif city_item == "Любые города онлайн":
-                    # Online ishlaydiganlar - cooperation_terms ichida "онлайн" yoki "online" qidirish
-                    city_q |= Q(cooperation_terms__icontains='онлайн') | Q(cooperation_terms__icontains='online')
+                    if city_q:
+                        questionnaires = questionnaires.filter(city_q)
+                elif "Любые города онлайн" in cities_list and not normal_cities:
+                    questionnaires = questionnaires.filter(
+                        Q(cooperation_terms__icontains='онлайн') | Q(cooperation_terms__icontains='online')
+                    )
                 else:
-                    # Oddiy shahar qidirish
-                    city_q |= Q(representative_cities__icontains=city_item)
-            if city_q:
-                questionnaires = questionnaires.filter(city_q)
+                    for city_item in normal_cities:
+                        questionnaires = questionnaires.filter(representative_cities__icontains=city_item)
         
-        # Выберите сегмент (segments - JSONField). Qabul: key (horeca) yoki value (HoReCa)
+        # Сегмент — frontend value (HoReCa), key (horeca) ga o'giramiz
         segment = request.query_params.get('segment')
         if segment:
             segments_list = [s.strip() for s in segment.split(',')]
-            segments_list = [SEGMENT_DISPLAY_TO_KEY.get(seg, seg) for seg in segments_list]
+            segments_list = _choices_display_to_keys(segments_list, SupplierQuestionnaire.SEGMENT_CHOICES)
             from django.db.models import Q
             segment_q = Q()
             for seg in segments_list:
@@ -3394,32 +3459,39 @@ class SupplierQuestionnaireListView(views.APIView):
             if segment_q:
                 questionnaires = questionnaires.filter(segment_q)
         
-        # Наличие НДС (vat_payment)
+        # Наличие НДС (vat_payment) — frontend value (Да/Нет), key (yes/no) ga o'giramiz
         vat_payment = request.query_params.get('vat_payment')
-        if vat_payment and vat_payment != 'not_important':
-            questionnaires = questionnaires.filter(vat_payment=vat_payment)
+        if vat_payment:
+            vat_list = [v.strip() for v in vat_payment.split(',') if v.strip()]
+            vat_list = _choices_display_to_keys(vat_list, SupplierQuestionnaire.VAT_PAYMENT_CHOICES)
+            from django.db.models import Q
+            vat_q = Q()
+            for v in vat_list:
+                if v != 'not_important' and v in ('yes', 'no'):
+                    vat_q |= Q(vat_payment=v)
+            if vat_q:
+                questionnaires = questionnaires.filter(vat_q)
         
-        # Карточки журналов (magazine_cards) - ko'p tanlash mumkin + mediaspace variantlari
+        # Карточки журналов (magazine_cards) — frontend value, key ga o'giramiz
         magazine_cards = request.query_params.get('magazine_cards')
         if magazine_cards:
-            # Ko'p tanlash mumkin - vergul bilan ajratilgan
             cards_list = [c.strip() for c in magazine_cards.split(',')]
+            cards_list = _choices_display_to_keys(cards_list, SupplierQuestionnaire.MAGAZINE_CARD_CHOICES)
             from django.db.models import Q
             cards_q = Q()
             for card in cards_list:
                 if card == 'not_important':
-                    # "не важно" - filter qo'llamaymiz
                     pass
                 else:
-                    # Standard variantlar yoki mediaspace variantlari
-                    cards_q |= Q(magazine_cards=card)
+                    cards_q |= Q(magazine_cards__contains=[card])
             if cards_q:
                 questionnaires = questionnaires.filter(cards_q)
         
-        # Скорость исполнения (execution_speed → speed_of_execution CharField)
+        # Скорость исполнения (execution_speed) — frontend value, key ga o'giramiz
         execution_speed = request.query_params.get('execution_speed')
         if execution_speed:
             speeds_list = [s.strip() for s in execution_speed.split(',')]
+            speeds_list = _choices_display_to_keys(speeds_list, SupplierQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
             from django.db.models import Q
             speed_q = Q()
             for speed in speeds_list:
@@ -3428,22 +3500,31 @@ class SupplierQuestionnaireListView(views.APIView):
             if speed_q:
                 questionnaires = questionnaires.filter(speed_q)
         
-        # Условия сотрудничества (cooperation_terms ichida search)
+        # Условия сотрудничества (cooperation_terms) — несколько через запятую, OR
         cooperation_terms = request.query_params.get('cooperation_terms')
-        if cooperation_terms and cooperation_terms != 'not_important':
-            # Mapping: up_to_10_percent -> "10%", up_to_20_percent -> "20%", up_to_30_percent -> "30%"
-            terms_mapping = {
-                'up_to_10_percent': '10%',
-                'up_to_20_percent': '20%',
-                'up_to_30_percent': '30%',
-            }
-            search_term = terms_mapping.get(cooperation_terms, cooperation_terms)
-            questionnaires = questionnaires.filter(cooperation_terms__icontains=search_term)
+        if cooperation_terms:
+            terms_list = [t.strip() for t in cooperation_terms.split(',') if t.strip()]
+            terms_mapping = {'up_to_10_percent': '10%', 'up_to_20_percent': '20%', 'up_to_30_percent': '30%'}
+            from django.db.models import Q
+            terms_q = Q()
+            for t in terms_list:
+                if t != 'not_important':
+                    search_term = terms_mapping.get(t, t)
+                    terms_q |= Q(cooperation_terms__icontains=search_term)
+            if terms_q:
+                questionnaires = questionnaires.filter(terms_q)
         
-        # Форма бизнеса (business_form)
+        # Форма бизнеса (business_form) — frontend value, key ga o'giramiz
         business_form = request.query_params.get('business_form')
         if business_form:
-            questionnaires = questionnaires.filter(business_form=business_form)
+            forms_list = [f.strip() for f in business_form.split(',') if f.strip()]
+            forms_list = _choices_display_to_keys(forms_list, SupplierQuestionnaire.BUSINESS_FORM_CHOICES)
+            if forms_list:
+                from django.db.models import Q
+                form_q = Q()
+                for f in forms_list:
+                    form_q |= Q(business_form=f)
+                questionnaires = questionnaires.filter(form_q)
         
         # Search by full_name or brand_name
         search = request.query_params.get('search')
