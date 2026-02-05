@@ -1413,7 +1413,7 @@ class UserPublicProfileView(views.APIView):
       * author_supervision - Авторский надзор
       * architecture - Архитектура
       * decorator - Декоратор
-      * designer_horika - Дизайнер Хорика
+      * designer_horika - Дизайнер HoReCa
       * residential_designer - Дизайнер жилой недвижимости
       * commercial_designer - Дизайнер коммерческой недвижимости
       * completing - Комплектация
@@ -1774,12 +1774,12 @@ class DesignerQuestionnaireListView(views.APIView):
       * Комфорт (comfort)
       * Бизнесс (business)
       * Примиум (premium)
-      * Хорика (horeca)
+      * HoReCa (horeca)
     - property_purposes: Назначение недвижимости - Назначение недвижимости
       * Для постоянного проживания (permanent_residence)
       * Для сдачи (for_rent)
       * Коммерческая недвижимость (commercial)
-      * Хорика (horeca)
+      * HoReCa (horeca)
     - object_areas: Площадь объекта (можно выбрать несколько) - Площадь объекта
       * до 10 м² (up_to_10m2)
       * до 40 м² (up_to_40m2)
@@ -1881,7 +1881,7 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
             {'value': 'permanent_residence', 'label': 'Для постоянного проживания'},
             {'value': 'for_rent', 'label': 'Для сдачи'},
             {'value': 'commercial', 'label': 'Коммерческая недвижимость'},
-            {'value': 'horeca', 'label': 'Хорика'},
+            {'value': 'horeca', 'label': 'HoReCa'},
         ]
         
         # Площадь объекта — текстовие варианты (value = то, что хранится в БД и принимает PUT)
@@ -1955,7 +1955,7 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
       * author_supervision - Авторский надзор
       * architecture - Архитектура
       * decorator - Декоратор
-      * designer_horika - Дизайнер Хорика
+      * designer_horika - Дизайнер HoReCa
       * residential_designer - Дизайнер жилой недвижимости
       * commercial_designer - Дизайнер коммерческой недвижимости
       * completing - Комплектация
@@ -2977,7 +2977,7 @@ class DesignerQuestionnaireStatusUpdateView(views.APIView):
       * Комфорт (comfort)
       * Бизнесс (business)
       * Примиум (premium)
-      * Хорика (horeca)
+      * HoReCa (horeca)
       * Эксклюзив (exclusive)
     - vat_payments: Наличие НДС (можно выбрать несколько) - Наличие НДС
       * hi home (hi_home)
@@ -3860,7 +3860,7 @@ class SupplierQuestionnaireDeleteView(views.APIView):
       * Комфорт (comfort)
       * Бизнесс (business)
       * Примиум (premium)
-      * Хорика (horeca)
+      * HoReCa (horeca)
       * Эксклюзив (exclusive)
     - vat_payments: Наличие НДС - Наличие НДС
       * Да (yes)
