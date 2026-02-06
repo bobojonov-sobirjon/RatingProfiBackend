@@ -688,7 +688,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
 class UserPublicSerializer(serializers.ModelSerializer):
     """
     Umumiy ko'rinish uchun foydalanuvchi serializer
-    (Boshqa foydalanuvchilar ko'rish uchun)
+    (Boshqa foydalanuvchilar ko'rish uchun).
+    company_name: agar null bo'lsa — full_name yoki anketadagi ism/brand_name chiqadi.
     """
     role_display = serializers.CharField(
         source='get_role_display',
@@ -696,9 +697,34 @@ class UserPublicSerializer(serializers.ModelSerializer):
     )
     
     groups = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
     
     def get_groups(self, obj):
         return obj.groups.values_list('name', flat=True)
+    
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_company_name(self, obj):
+        """Изм или бренд: company_name, иначе full_name, иначе из анкеты по phone."""
+        if obj.company_name:
+            return obj.company_name
+        if obj.full_name:
+            return obj.full_name
+        phone = getattr(obj, 'phone', None)
+        if not phone:
+            return None
+        q = DesignerQuestionnaire.objects.filter(phone=phone, is_deleted=False).first()
+        if q:
+            return (q.full_name or q.full_name_en) or None
+        q = RepairQuestionnaire.objects.filter(phone=phone, is_deleted=False).first()
+        if q:
+            return q.brand_name
+        q = SupplierQuestionnaire.objects.filter(phone=phone, is_deleted=False).first()
+        if q:
+            return q.brand_name
+        q = MediaQuestionnaire.objects.filter(phone=phone, is_deleted=False).first()
+        if q:
+            return q.brand_name
+        return None
     
     class Meta:
         model = User
