@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field, OpenApiTypes
 from drf_spectacular.types import OpenApiTypes
+from django.db.models import Q
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
@@ -702,26 +703,62 @@ class UserPublicSerializer(serializers.ModelSerializer):
     def get_groups(self, obj):
         return obj.groups.values_list('name', flat=True)
     
+    def _company_name_questionnaire_filters(self, phone, email):
+        """Q filtrlari: phone yoki email bo'yicha (raqamlar va exact)."""
+        qs = Q()
+        if phone:
+            qs |= Q(phone=phone)
+            nphone = ''.join(c for c in phone if c.isdigit())
+            if nphone:
+                qs |= Q(phone=nphone)
+        if email:
+            qs |= Q(email__iexact=email)
+        return qs
+
     @extend_schema_field(OpenApiTypes.STR)
     def get_company_name(self, obj):
-        """Изм или бренд: company_name, иначе full_name, иначе из анкеты по phone."""
+        """Изм или бренд: company_name, иначе full_name, иначе из анкеты по группе (Дизайн→FIO, остальные→brand_name)."""
         if obj.company_name:
             return obj.company_name
         if obj.full_name:
             return obj.full_name
-        phone = getattr(obj, 'phone', None)
-        if not phone:
+        phone = (getattr(obj, 'phone', None) or '').strip()
+        email = (getattr(obj, 'email', None) or '').strip().lower() or None
+        if not phone and not email:
             return None
-        q = DesignerQuestionnaire.objects.filter(phone=phone, is_deleted=False).first()
+        qf = self._company_name_questionnaire_filters(phone, email)
+        group_names = set(obj.groups.values_list('name', flat=True))
+
+        # Дизайн — FIO из DesignerQuestionnaire
+        if 'Дизайн' in group_names or not group_names:
+            q = DesignerQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
+            if q:
+                return (q.full_name or q.full_name_en) or None
+        # Ремонт / Поставщик / Медиа — brand_name из своей анкеты
+        if 'Ремонт' in group_names:
+            q = RepairQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
+            if q:
+                return q.brand_name
+        if 'Поставщик' in group_names:
+            q = SupplierQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
+            if q:
+                return q.brand_name
+        if 'Медиа' in group_names:
+            q = MediaQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
+            if q:
+                return q.brand_name
+
+        # Fallback: по порядку Designer → Repair → Supplier → Media
+        q = DesignerQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
         if q:
             return (q.full_name or q.full_name_en) or None
-        q = RepairQuestionnaire.objects.filter(phone=phone, is_deleted=False).first()
+        q = RepairQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
         if q:
             return q.brand_name
-        q = SupplierQuestionnaire.objects.filter(phone=phone, is_deleted=False).first()
+        q = SupplierQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
         if q:
             return q.brand_name
-        q = MediaQuestionnaire.objects.filter(phone=phone, is_deleted=False).first()
+        q = MediaQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
         if q:
             return q.brand_name
         return None
