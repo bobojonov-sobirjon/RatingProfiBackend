@@ -703,21 +703,88 @@ class UserPublicSerializer(serializers.ModelSerializer):
     def get_groups(self, obj):
         return obj.groups.values_list('name', flat=True)
     
+    def _company_name_phone_variants(self, phone):
+        """Telefon uchun barcha variantlar (DB da turli formatda saqlanishi mumkin)."""
+        if not phone:
+            return []
+        n = ''.join(c for c in phone if c.isdigit())
+        if not n:
+            return [phone.strip()]
+        out = [phone.strip(), n]
+        if len(n) == 11 and n[0] == '7':
+            out.append('8' + n[1:])
+            out.append('+' + n)
+            out.append('7 ' + n[1:4] + ' ' + n[4:7] + ' ' + n[7:9] + ' ' + n[9:11])
+        elif len(n) == 11 and n[0] == '8':
+            out.append('7' + n[1:])
+            out.append('+' + '7' + n[1:])
+        elif len(n) >= 10:
+            out.append('+' + n)
+        return list(dict.fromkeys(out))
+
     def _company_name_questionnaire_filters(self, phone, email):
-        """Q filtrlari: phone yoki email bo'yicha (raqamlar va exact)."""
+        """Q: phone (barcha variantlar) va email bo'yicha."""
         qs = Q()
-        if phone:
-            qs |= Q(phone=phone)
-            nphone = ''.join(c for c in phone if c.isdigit())
-            if nphone:
-                qs |= Q(phone=nphone)
+        for v in self._company_name_phone_variants(phone):
+            if v:
+                qs |= Q(phone=v)
         if email:
             qs |= Q(email__iexact=email)
         return qs
 
+    def _norm_phone(self, s):
+        return ''.join(c for c in (s or '') if c.isdigit())
+
+    def _get_company_name_from_questionnaires(self, obj, qf, phone_digits=None, email_lower=None):
+        """Barcha anketalarda qidirib: Designer→full_name, qolganlari→brand_name."""
+        for model, attr in [
+            (DesignerQuestionnaire, 'full_name'),
+            (RepairQuestionnaire, 'brand_name'),
+            (SupplierQuestionnaire, 'brand_name'),
+            (MediaQuestionnaire, 'brand_name'),
+        ]:
+            q = model.objects.filter(is_deleted=False).filter(qf).first()
+            if q:
+                if attr == 'full_name':
+                    val = (getattr(q, 'full_name') or getattr(q, 'full_name_en', None) or '').strip()
+                else:
+                    val = (getattr(q, attr, None) or '').strip()
+                if val:
+                    return val
+
+        # Fallback: telefon faqat raqamda mos keladi bo'lsa (DB da boshqa format)
+        if not phone_digits and not email_lower:
+            return None
+        for model, attr in [
+            (DesignerQuestionnaire, 'full_name'),
+            (RepairQuestionnaire, 'brand_name'),
+            (SupplierQuestionnaire, 'brand_name'),
+            (MediaQuestionnaire, 'brand_name'),
+        ]:
+            qs = model.objects.filter(is_deleted=False)
+            if email_lower:
+                qs = qs.filter(email__iexact=email_lower)
+            limit = 300 if email_lower else 500
+            for q in qs[:limit]:
+                if phone_digits and self._norm_phone(getattr(q, 'phone', None)) == phone_digits:
+                    if attr == 'full_name':
+                        val = (getattr(q, 'full_name') or getattr(q, 'full_name_en', None) or '').strip()
+                    else:
+                        val = (getattr(q, attr, None) or '').strip()
+                    if val:
+                        return val
+                if email_lower and getattr(q, 'email', None) and (q.email or '').strip().lower() == email_lower:
+                    if attr == 'full_name':
+                        val = (getattr(q, 'full_name') or getattr(q, 'full_name_en', None) or '').strip()
+                    else:
+                        val = (getattr(q, attr, None) or '').strip()
+                    if val:
+                        return val
+        return None
+
     @extend_schema_field(OpenApiTypes.STR)
     def get_company_name(self, obj):
-        """Изм или бренд: company_name, иначе full_name, иначе из анкеты по группе (Дизайн→FIO, остальные→brand_name)."""
+        """company_name: profil → full_name → barcha anketalardan (Designer→FIO, qolganlari→brand_name)."""
         if obj.company_name:
             return obj.company_name
         if obj.full_name:
@@ -727,41 +794,8 @@ class UserPublicSerializer(serializers.ModelSerializer):
         if not phone and not email:
             return None
         qf = self._company_name_questionnaire_filters(phone, email)
-        group_names = set(obj.groups.values_list('name', flat=True))
-
-        # Дизайн — FIO из DesignerQuestionnaire
-        if 'Дизайн' in group_names or not group_names:
-            q = DesignerQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
-            if q:
-                return (q.full_name or q.full_name_en) or None
-        # Ремонт / Поставщик / Медиа — brand_name из своей анкеты
-        if 'Ремонт' in group_names:
-            q = RepairQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
-            if q:
-                return q.brand_name
-        if 'Поставщик' in group_names:
-            q = SupplierQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
-            if q:
-                return q.brand_name
-        if 'Медиа' in group_names:
-            q = MediaQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
-            if q:
-                return q.brand_name
-
-        # Fallback: по порядку Designer → Repair → Supplier → Media
-        q = DesignerQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
-        if q:
-            return (q.full_name or q.full_name_en) or None
-        q = RepairQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
-        if q:
-            return q.brand_name
-        q = SupplierQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
-        if q:
-            return q.brand_name
-        q = MediaQuestionnaire.objects.filter(is_deleted=False).filter(qf).first()
-        if q:
-            return q.brand_name
-        return None
+        nphone = self._norm_phone(phone)
+        return self._get_company_name_from_questionnaires(obj, qf, phone_digits=nphone or None, email_lower=email)
     
     class Meta:
         model = User
