@@ -27,6 +27,7 @@ from .views import (
     SupplierQuestionnaireDetailView,
     SupplierQuestionnaireStatusUpdateView,
     SupplierQuestionnaireFilterChoicesView,
+    SecondoryFilterDataSupplierView,
     MediaQuestionnaireListView,
     MediaQuestionnaireDetailView,
     MediaQuestionnaireStatusUpdateView,
@@ -90,6 +91,7 @@ urlpatterns = [
     
     path('supplier-questionnaires/', SupplierQuestionnaireListView.as_view(), name='supplier-questionnaire-list'),
     path('supplier-questionnaires/filter-choices/', SupplierQuestionnaireFilterChoicesView.as_view(), name='supplier-questionnaire-filter-choices'),
+    path('supplier-questionnaires/secondory-filter-data/', SecondoryFilterDataSupplierView.as_view(), name='secondory-filter-data-supplier'),
     path('supplier-questionnaires/<int:pk>/', SupplierQuestionnaireDetailView.as_view(), name='supplier-questionnaire-detail'),
     path('supplier-questionnaires/<int:pk>/update-status/', SupplierQuestionnaireStatusUpdateView.as_view(), name='supplier-questionnaire-status-update'),
     path('supplier-questionnaires/<int:pk>/moderation/', SupplierQuestionnaireModerationView.as_view(), name='supplier-questionnaire-moderation'),

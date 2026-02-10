@@ -3349,6 +3349,12 @@ class SupplierQuestionnaireListView(views.APIView):
                 description='Поиск по full_name или brand_name',
                 required=False,
             ),
+            OpenApiParameter(name='rough_materials', type=str, location=OpenApiParameter.QUERY, description='Черновые материалы: несколько через запятую (OR)', required=False),
+            OpenApiParameter(name='finishing_materials', type=str, location=OpenApiParameter.QUERY, description='Чистовые материалы: несколько через запятую (OR)', required=False),
+            OpenApiParameter(name='upholstered_furniture', type=str, location=OpenApiParameter.QUERY, description='Мягкая мебель: несколько через запятую (OR)', required=False),
+            OpenApiParameter(name='cabinet_furniture', type=str, location=OpenApiParameter.QUERY, description='Корпусная мебель: несколько через запятую (OR)', required=False),
+            OpenApiParameter(name='technique', type=str, location=OpenApiParameter.QUERY, description='Техника: несколько через запятую (OR)', required=False),
+            OpenApiParameter(name='decor', type=str, location=OpenApiParameter.QUERY, description='Декор: несколько через запятую (OR)', required=False),
             OpenApiParameter(
                 name='ordering',
                 type=str,
@@ -3533,6 +3539,24 @@ class SupplierQuestionnaireListView(views.APIView):
                 django_models.Q(full_name__icontains=search) | 
                 django_models.Q(brand_name__icontains=search)
             )
+        
+        # Secondary filter fields (multiple values = OR)
+        for param_name, field_name in [
+            ('rough_materials', 'rough_materials'),
+            ('finishing_materials', 'finishing_materials'),
+            ('upholstered_furniture', 'upholstered_furniture'),
+            ('cabinet_furniture', 'cabinet_furniture'),
+            ('technique', 'technique'),
+            ('decor', 'decor'),
+        ]:
+            param = request.query_params.get(param_name)
+            if param:
+                values = [v.strip() for v in param.split(',') if v.strip()]
+                if values:
+                    q_sec = django_models.Q()
+                    for v in values:
+                        q_sec |= django_models.Q(**{f'{field_name}__contains': [v]})
+                    questionnaires = questionnaires.filter(q_sec)
         
         # Ordering
         ordering = request.query_params.get('ordering', '-created_at')
@@ -4010,6 +4034,54 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
             'execution_speeds': execution_speeds,
             'cooperation_terms_options': cooperation_terms_options,
         }, status=status.HTTP_200_OK)
+
+
+# Дополнительный фильтр для каждой из основных категорий (статичные значения для secondory_filter_data_supplier)
+SUPPLIER_SECONDARY_FILTER_DATA = {
+    'rough_materials': [
+        {'name': 'виды материалов'}, {'name': 'электрика'}, {'name': 'су'}, {'name': 'пол'},
+        {'name': 'стены'}, {'name': 'потолок'}, {'name': 'прочее'},
+    ],
+    'finishing_materials': [
+        {'name': 'категория товара'}, {'name': 'сантехника'}, {'name': 'пол'}, {'name': 'потолок'},
+        {'name': 'стены'}, {'name': 'декоративные элементы'}, {'name': 'двери'}, {'name': 'камень'},
+        {'name': 'электрика'}, {'name': 'стеновые панели'},
+    ],
+    'upholstered_furniture': [
+        {'name': 'готовая'}, {'name': 'под заказ'}, {'name': 'мебель по эскизам'}, {'name': 'стулья'},
+        {'name': 'спальни'}, {'name': 'детские'}, {'name': 'гостинные'}, {'name': 'хорика'},
+        {'name': 'уличная мебель'}, {'name': 'матрасы и подушки'},
+    ],
+    'cabinet_furniture': [
+        {'name': 'готовая'}, {'name': 'под заказ'}, {'name': 'мебель по эскизам'}, {'name': 'столы и стулья'},
+        {'name': 'шкафы и гардеробные'}, {'name': 'хорика'}, {'name': 'уличная мебель'},
+    ],
+    'technique': [
+        {'name': 'под заказ'}, {'name': 'есть склад'}, {'name': 'кухня'}, {'name': 'кондиционер'},
+        {'name': 'умный дом'}, {'name': 'свет'},
+    ],
+    'decor': [
+        {'name': 'ковры'}, {'name': 'посуда'}, {'name': 'картины'}, {'name': 'элементы интерьера'},
+        {'name': 'дизайнерские объекты'}, {'name': 'лепнина'}, {'name': 'Элементы декора по индивидуальным эскизам'},
+    ],
+}
+
+
+@extend_schema(
+    tags=['Supplier Questionnaires'],
+    summary='Дополнительный фильтр для каждой из основных категорий',
+    description='Возвращает статичный список значений для полей: rough_materials, finishing_materials, upholstered_furniture, cabinet_furniture, technique, decor. Формат: каждая категория — массив объектов с полем "name".',
+    responses={200: {'description': 'rough_materials, finishing_materials, upholstered_furniture, cabinet_furniture, technique, decor'}},
+)
+class SecondoryFilterDataSupplierView(views.APIView):
+    """
+    Дополнительный фильтр для каждой из основных категорий поставщика.
+    GET /api/v1/accounts/supplier-questionnaires/secondory-filter-data/
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response(SUPPLIER_SECONDARY_FILTER_DATA, status=status.HTTP_200_OK)
 
 
 @extend_schema(

@@ -2363,6 +2363,12 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             'magazine_cards',
             'magazine_cards_display',
             'categories',
+            'rough_materials',
+            'finishing_materials',
+            'upholstered_furniture',
+            'cabinet_furniture',
+            'technique',
+            'decor',
             'speed_of_execution',
             'about_company',
             'terms_of_cooperation',
@@ -2388,6 +2394,8 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                 'telegram_channel', 'pinterest', 'instagram', 'website', 'other_contacts',
                 'delivery_terms', 'vat_payment', 'guarantees', 'designer_contractor_terms',
                 'magazine_cards', 'data_processing_consent', 'company_logo', 'group',
+                'rough_materials', 'finishing_materials', 'upholstered_furniture',
+                'cabinet_furniture', 'technique', 'decor',
                 'about_company', 'terms_of_cooperation'
             ]
         }
@@ -2512,6 +2520,46 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                         if hasattr(data, 'setlist'):
                             data.setlist(field, [])
                         else:
+                            data[field] = []
+            
+            # Supplier: secondary filter JSON fields (rough_materials, finishing_materials, ...)
+            if self.Meta.model.__name__ == 'SupplierQuestionnaire':
+                for field in ['rough_materials', 'finishing_materials', 'upholstered_furniture', 'cabinet_furniture', 'technique', 'decor']:
+                    if field in data:
+                        value = data.get(field)
+                        if isinstance(value, list):
+                            parsed_list = []
+                            for item in value:
+                                if item is None:
+                                    continue
+                                if isinstance(item, dict) and 'name' in item:
+                                    parsed_list.append(str(item['name']))
+                                else:
+                                    parsed_list.append(str(item))
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
+                            if hasattr(data, 'setlist'):
+                                data.setlist(field, parsed_list)
+                            else:
+                                data[field] = parsed_list
+                        elif isinstance(value, str):
+                            try:
+                                import json
+                                parsed = json.loads(value)
+                                if isinstance(parsed, list):
+                                    parsed_list = [str(it.get('name', it) if isinstance(it, dict) else it) for it in parsed if it is not None]
+                                else:
+                                    parsed_list = []
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                data[field] = parsed_list
+                            except (json.JSONDecodeError, ValueError):
+                                if hasattr(data, '_mutable') and not data._mutable:
+                                    data._mutable = True
+                                data[field] = []
+                        elif value is None or value == '':
+                            if hasattr(data, '_mutable') and not data._mutable:
+                                data._mutable = True
                             data[field] = []
             
             # Website field uchun bo'sh stringlarni None ga o'zgartirish

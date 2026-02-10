@@ -1103,6 +1103,44 @@ class SupplierQuestionnaire(models.Model):
         verbose_name='Категории'
     )
     
+    # Дополнительные категории ассортимента (JSONField, null=True, blank=True)
+    rough_materials = models.JSONField(
+        default=list,
+        blank=True,
+        null=True,
+        verbose_name='Черновые материалы'
+    )
+    finishing_materials = models.JSONField(
+        default=list,
+        blank=True,
+        null=True,
+        verbose_name='Чистовые материалы'
+    )
+    upholstered_furniture = models.JSONField(
+        default=list,
+        blank=True,
+        null=True,
+        verbose_name='Мягкая мебель'
+    )
+    cabinet_furniture = models.JSONField(
+        default=list,
+        blank=True,
+        null=True,
+        verbose_name='Корпусная мебель'
+    )
+    technique = models.JSONField(
+        default=list,
+        blank=True,
+        null=True,
+        verbose_name='Техника'
+    )
+    decor = models.JSONField(
+        default=list,
+        blank=True,
+        null=True,
+        verbose_name='Декор'
+    )
+    
     # Скорость исполнения / сроки поставки
     speed_of_execution = models.CharField(
         max_length=30,
