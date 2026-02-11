@@ -4066,22 +4066,54 @@ SUPPLIER_SECONDARY_FILTER_DATA = {
     ],
 }
 
+# categories query param: frontend yuboradi (Черновые материалы, Чистовые материалы, ...) -> response key
+SUPPLIER_CATEGORY_NAME_TO_KEY = {
+    'Черновые материалы': 'rough_materials',
+    'Чистовые материалы': 'finishing_materials',
+    'Мягкая мебель': 'upholstered_furniture',
+    'Корпусная мебель': 'cabinet_furniture',
+    'Техника': 'technique',
+    'Декор': 'decor',
+}
+
 
 @extend_schema(
     tags=['Supplier Questionnaires'],
     summary='Дополнительный фильтр для каждой из основных категорий',
-    description='Возвращает статичный список значений для полей: rough_materials, finishing_materials, upholstered_furniture, cabinet_furniture, technique, decor. Формат: каждая категория — массив объектов с полем "name".',
-    responses={200: {'description': 'rough_materials, finishing_materials, upholstered_furniture, cabinet_furniture, technique, decor'}},
+    description='Возвращает статичный список значений для полей: rough_materials, finishing_materials, upholstered_furniture, cabinet_furniture, technique, decor. Формат: каждая категория — массив объектов с полем "name". Query: categories — несколько через запятую (напр. Чистовые материалы, Черновые материалы), faqat shu kategoriyalar qaytadi.',
+    parameters=[
+        OpenApiParameter(
+            name='categories',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Категории через запятую: Черновые материалы, Чистовые материалы, Мягкая мебель, Корпусная мебель, Техника, Декор. Bo\'sh bo\'lsa — hammasi qaytadi.',
+            required=False,
+        ),
+    ],
+    responses={200: {'description': 'rough_materials, finishing_materials, ... (categories bo\'yicha filtr)'}},
 )
 class SecondoryFilterDataSupplierView(views.APIView):
     """
     Дополнительный фильтр для каждой из основных категорий поставщика.
     GET /api/v1/accounts/supplier-questionnaires/secondory-filter-data/
+    ?categories=Чистовые материалы,Черновые материалы — faqat finishing_materials va rough_materials qaytadi.
     """
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        return Response(SUPPLIER_SECONDARY_FILTER_DATA, status=status.HTTP_200_OK)
+        categories_param = request.query_params.get('categories', '').strip()
+        if not categories_param:
+            return Response(SUPPLIER_SECONDARY_FILTER_DATA, status=status.HTTP_200_OK)
+        categories_list = [c.strip() for c in categories_param.split(',') if c.strip()]
+        keys = []
+        for name in categories_list:
+            key = SUPPLIER_CATEGORY_NAME_TO_KEY.get(name)
+            if key and key not in keys:
+                keys.append(key)
+        if not keys:
+            return Response(SUPPLIER_SECONDARY_FILTER_DATA, status=status.HTTP_200_OK)
+        data = {k: SUPPLIER_SECONDARY_FILTER_DATA[k] for k in keys if k in SUPPLIER_SECONDARY_FILTER_DATA}
+        return Response(data, status=status.HTTP_200_OK)
 
 
 @extend_schema(
