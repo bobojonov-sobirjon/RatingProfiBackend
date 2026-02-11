@@ -3261,6 +3261,10 @@ class RepairQuestionnaireStatusUpdateView(views.APIView):
     - data_processing_consent: Согласие на обработку данных (обязательное, boolean)
     - company_logo: Логотип компании (shaxsiy kabinet uchun) (необязательное, файл)
     
+    Массивы (representative_cities, other_contacts, rough_materials, finishing_materials, upholstered_furniture, cabinet_furniture, technique, decor):
+    - В Swagger выберите body type "application/json" и отправляйте массивы как JSON: "rough_materials": ["электрика", "су"].
+    - При form-data можно: один раз ключ с JSON-строкой "[\"электрика\",\"су\"]" или через запятую "электрика,су".
+    
     GET и PUT принимают/возвращают те же поля.
     ''',
     request=SupplierQuestionnaireSerializer,
