@@ -251,26 +251,3 @@ EMAIL_HOST_USER = 'sobirbobojonov2000@gmail.com'
 EMAIL_HOST_PASSWORD = 'harntaefuxuvlqqw'
 DEFAULT_FROM_EMAIL = 'sobirbobojonov2000@gmail.com'
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-
-# Questionnaire list filter debug: qaysi query ishlayapti, nima uchun data kelmayapti
-# DEBUG=True bo'lganda console'da [DesignerQuestionnaireList], [RepairQuestionnaireList], [SupplierQuestionnaireList] loglari chiqadi
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {'format': '%(levelname)s %(asctime)s %(name)s %(message)s'},
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-    },
-    'loggers': {
-        'accounts.questionnaires': {
-            'handlers': ['console'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
-            'propagate': False,
-        },
-    },
-}

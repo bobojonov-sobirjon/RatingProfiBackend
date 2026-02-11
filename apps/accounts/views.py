@@ -14,7 +14,6 @@ from django.utils.crypto import get_random_string
 from datetime import date, timedelta
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.contrib.auth.models import Group
-import logging
 
 from .serializers import (
     AdminLoginSerializer,
@@ -60,9 +59,6 @@ def _choices_display_to_keys(values_list, choices_tuples):
         return values_list
     display_to_key = {str(label): key for key, label in choices_tuples}
     return [display_to_key.get(v.strip(), v.strip()) for v in values_list]
-
-# Debug: questionnaire list filter logging (set LOGLEVEL DEBUG for logger 'accounts.questionnaires')
-logger = logging.getLogger('accounts.questionnaires')
 
 # Password reset tokenlarni saqlash uchun dict (production'da cache yoki DB ishlatish kerak)
 PASSWORD_RESET_TOKENS = {}
@@ -1489,6 +1485,13 @@ class DesignerQuestionnaireListView(views.APIView):
                 required=False,
             ),
             OpenApiParameter(
+                name='category',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Синоним categories. Категории (label из filter-choices: Дизайнер жилых помещений, Декоратор и т.д.). Несколько через запятую.',
+                required=False,
+            ),
+            OpenApiParameter(
                 name='categories',
                 type=str,
                 location=OpenApiParameter.QUERY,
@@ -1576,11 +1579,6 @@ class DesignerQuestionnaireListView(views.APIView):
             questionnaires = DesignerQuestionnaire.objects.filter(is_deleted=False)
         else:
             questionnaires = DesignerQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
-        applied_filters = []
-        if logger.isEnabledFor(logging.DEBUG):
-            _params = dict(request.query_params)
-            _c = questionnaires.count()
-            logger.debug("[DesignerQuestionnaireList] query_params=%s, base_count=%s", _params, _c)
         # Filtering (frontend value yuboradi — key ga o'giramiz)
         # Выберете основную котегорию (group) — несколько через запятую, OR
         group = request.query_params.get('group')
@@ -1593,9 +1591,8 @@ class DesignerQuestionnaireListView(views.APIView):
                 for g in groups_list:
                     group_q |= Q(group=g)
                 questionnaires = questionnaires.filter(group_q)
-                applied_filters.append('group=%s->%s' % (group, groups_list))
         
-        # Категории (categories) — frontend value, key ga o'giramiz
+        # Категории (categories) — frontend value, key ga o'giramiz. category = синоним categories
         categories_param = request.query_params.get('categories') or request.query_params.get('category')
         if categories_param:
             categories_list = [c.strip() for c in categories_param.split(',')]
@@ -1606,7 +1603,6 @@ class DesignerQuestionnaireListView(views.APIView):
                 cat_q |= Q(categories__contains=[cat])
             if cat_q:
                 questionnaires = questionnaires.filter(cat_q)
-                applied_filters.append('categories=%s->%s' % (categories_param, categories_list))
         
         # Выберете город (city). Несколько через запятую = AND: только те, у кого есть ВСЕ выбранные города
         city = request.query_params.get('city')
@@ -1636,7 +1632,6 @@ class DesignerQuestionnaireListView(views.APIView):
                         questionnaires = questionnaires.filter(
                             Q(city__icontains=city_item) | Q(work_cities__icontains=city_item)
                         )
-                applied_filters.append('city=%s' % city)
         
         # Сегмент — frontend value (HoReCa), key (horeca) ga o'giramiz
         segment = request.query_params.get('segment')
@@ -1649,7 +1644,6 @@ class DesignerQuestionnaireListView(views.APIView):
                 segment_q |= Q(segments__contains=[seg])
             if segment_q:
                 questionnaires = questionnaires.filter(segment_q)
-                applied_filters.append('segment=%s->%s' % (segment, segments_list))
         
         # Назначение недвижимости (property_purpose) — frontend value, key ga o'giramiz
         property_purpose = request.query_params.get('property_purpose')
@@ -1719,16 +1713,10 @@ class DesignerQuestionnaireListView(views.APIView):
         search = request.query_params.get('search')
         if search:
             questionnaires = questionnaires.filter(full_name__icontains=search)
-            applied_filters.append('search=%s' % search)
         
         # Ordering
         ordering = request.query_params.get('ordering', '-created_at')
         questionnaires = questionnaires.order_by(ordering)
-        
-        if logger.isEnabledFor(logging.DEBUG):
-            _final_count = questionnaires.count()
-            logger.debug("[DesignerQuestionnaireList] applied_filters=%s, final_count=%s", applied_filters, _final_count)
-            logger.debug("[DesignerQuestionnaireList] sql=%s", str(questionnaires.query))
         
         # Pagination
         paginator = LimitOffsetPagination()
@@ -2445,6 +2433,20 @@ class RepairQuestionnaireListView(views.APIView):
                 required=False,
             ),
             OpenApiParameter(
+                name='category',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Фильтр по основной категории по label из filter-choices: "Черновые работы", "ПОД КЛЮЧ", "Чистовые работы", "Сантехника и плитка", "Пол", "Стены", "Комнаты под ключ", "Электрика". Несколько через запятую. Синоним: categories.',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='categories',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='То же, что category. Фильтр по основной категории (label) или по полю categories (Ремонтная бригада, Подрядчик и т.д.).',
+                required=False,
+            ),
+            OpenApiParameter(
                 name='city',
                 type=str,
                 location=OpenApiParameter.QUERY,
@@ -2535,11 +2537,6 @@ class RepairQuestionnaireListView(views.APIView):
             questionnaires = RepairQuestionnaire.objects.filter(is_deleted=False)
         else:
             questionnaires = RepairQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
-        applied_filters = []
-        if logger.isEnabledFor(logging.DEBUG):
-            _params = dict(request.query_params)
-            _c = questionnaires.count()
-            logger.debug("[RepairQuestionnaireList] query_params=%s, base_count=%s", _params, _c)
         # Filtering
         # Выберете основную котегорию (group) - ko'p tanlash mumkin
         group = request.query_params.get('group')
@@ -2572,7 +2569,6 @@ class RepairQuestionnaireListView(views.APIView):
                         group_q |= Q(work_list__icontains='электрика')
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
-                    applied_filters.append('group=%s->%s' % (group, groups_list))
         
         # Категории (categories) — frontend value. "Черновые работы", "ПОД КЛЮЧ" va boshqalar aslida group (asosiy kategoriya);
         # agar category/categories shu label'lardan bo'lsa, group filterni (work_list) qo'llaymiz; qolganlari CATEGORY_CHOICES bo'yicha
@@ -2630,7 +2626,6 @@ class RepairQuestionnaireListView(views.APIView):
                     cat_q |= Q(categories__contains=[cat])
                 if cat_q:
                     questionnaires = questionnaires.filter(cat_q)
-            applied_filters.append('category/categories=%s (group_keys=%s, category_values=%s)' % (categories_param, group_keys_from_category, category_values))
         
         # Выберете город (representative_cities). Несколько через запятую = AND
         city = request.query_params.get('city')
@@ -2656,7 +2651,6 @@ class RepairQuestionnaireListView(views.APIView):
                 else:
                     for city_item in normal_cities:
                         questionnaires = questionnaires.filter(representative_cities__icontains=city_item)
-                applied_filters.append('city=%s' % city)
         
         # Сегмент — frontend value (HoReCa), key (horeca) ga o'giramiz
         segment = request.query_params.get('segment')
@@ -2669,7 +2663,6 @@ class RepairQuestionnaireListView(views.APIView):
                 segment_q |= Q(segments__contains=[seg])
             if segment_q:
                 questionnaires = questionnaires.filter(segment_q)
-                applied_filters.append('segment=%s->%s' % (segment, segments_list))
         
         # Наличие НДС (vat_payment) — frontend value (Да/Нет), key (yes/no) ga o'giramiz
         vat_payment = request.query_params.get('vat_payment')
@@ -2791,16 +2784,10 @@ class RepairQuestionnaireListView(views.APIView):
                 django_models.Q(full_name__icontains=search) | 
                 django_models.Q(brand_name__icontains=search)
             )
-            applied_filters.append('search=%s' % search)
         
         # Ordering
         ordering = request.query_params.get('ordering', '-created_at')
         questionnaires = questionnaires.order_by(ordering)
-        
-        if logger.isEnabledFor(logging.DEBUG):
-            _final_count = questionnaires.count()
-            logger.debug("[RepairQuestionnaireList] applied_filters=%s, final_count=%s", applied_filters, _final_count)
-            logger.debug("[RepairQuestionnaireList] sql=%s", str(questionnaires.query))
         
         # Pagination
         paginator = LimitOffsetPagination()
@@ -3372,6 +3359,20 @@ class SupplierQuestionnaireListView(views.APIView):
                 required=False,
             ),
             OpenApiParameter(
+                name='category',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Фильтр по основной категории по label из filter-choices: "Черновые материалы", "Чистовые материалы", "Мягкая мебель", "Корпусная мебель", "Техника", "Декор". Несколько через запятую. Синоним: categories.',
+                required=False,
+            ),
+            OpenApiParameter(
+                name='categories',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='То же, что category. Фильтр по основной категории (label) или по полю categories (Поставщик, Фабрика и т.д.).',
+                required=False,
+            ),
+            OpenApiParameter(
                 name='city',
                 type=str,
                 location=OpenApiParameter.QUERY,
@@ -3468,11 +3469,6 @@ class SupplierQuestionnaireListView(views.APIView):
             questionnaires = SupplierQuestionnaire.objects.filter(is_deleted=False)
         else:
             questionnaires = SupplierQuestionnaire.objects.filter(is_moderation=True, is_deleted=False)
-        applied_filters = []
-        if logger.isEnabledFor(logging.DEBUG):
-            _params = dict(request.query_params)
-            _c = questionnaires.count()
-            logger.debug("[SupplierQuestionnaireList] query_params=%s, base_count=%s", _params, _c)
         # Filtering
         # Выберете основную котегорию (group) - ko'p tanlash mumkin
         group = request.query_params.get('group')
@@ -3501,7 +3497,6 @@ class SupplierQuestionnaireListView(views.APIView):
                         group_q |= Q(product_assortment__icontains='декор')
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
-                    applied_filters.append('group=%s->%s' % (group, groups_list))
         
         # Категории (categories) — frontend value. "Черновые материалы", "Мягкая мебель" va boshqalar aslida group (asosiy kategoriя);
         # agar category/categories shu label'lardan bo'lsa, group filterni (product_assortment) qo'llaymiz; qolganlari CATEGORY_CHOICES bo'yicha
@@ -3551,7 +3546,6 @@ class SupplierQuestionnaireListView(views.APIView):
                     cat_q |= Q(categories__contains=[cat])
                 if cat_q:
                     questionnaires = questionnaires.filter(cat_q)
-            applied_filters.append('category/categories=%s (group_keys=%s, category_values=%s)' % (categories_param, group_keys_from_category, category_values))
         
         # Выберете город (representative_cities). Несколько через запятую = AND
         city = request.query_params.get('city')
@@ -3576,7 +3570,6 @@ class SupplierQuestionnaireListView(views.APIView):
                 else:
                     for city_item in normal_cities:
                         questionnaires = questionnaires.filter(representative_cities__icontains=city_item)
-                applied_filters.append('city=%s' % city)
         
         # Сегмент — frontend value (HoReCa), key (horeca) ga o'giramiz
         segment = request.query_params.get('segment')
@@ -3589,7 +3582,6 @@ class SupplierQuestionnaireListView(views.APIView):
                 segment_q |= Q(segments__contains=[seg])
             if segment_q:
                 questionnaires = questionnaires.filter(segment_q)
-                applied_filters.append('segment=%s->%s' % (segment, segments_list))
         
         # Наличие НДС (vat_payment) — frontend value (Да/Нет), key (yes/no) ga o'giramiz
         vat_payment = request.query_params.get('vat_payment')
@@ -3665,7 +3657,6 @@ class SupplierQuestionnaireListView(views.APIView):
                 django_models.Q(full_name__icontains=search) | 
                 django_models.Q(brand_name__icontains=search)
             )
-            applied_filters.append('search=%s' % search)
         
         # Secondary filter fields (multiple values = OR)
         for param_name, field_name in [
@@ -3688,11 +3679,6 @@ class SupplierQuestionnaireListView(views.APIView):
         # Ordering
         ordering = request.query_params.get('ordering', '-created_at')
         questionnaires = questionnaires.order_by(ordering)
-        
-        if logger.isEnabledFor(logging.DEBUG):
-            _final_count = questionnaires.count()
-            logger.debug("[SupplierQuestionnaireList] applied_filters=%s, final_count=%s", applied_filters, _final_count)
-            logger.debug("[SupplierQuestionnaireList] sql=%s", str(questionnaires.query))
         
         # Pagination
         paginator = LimitOffsetPagination()
