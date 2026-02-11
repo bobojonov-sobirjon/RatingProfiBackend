@@ -1524,7 +1524,7 @@ class DesignerQuestionnaireListView(views.APIView):
                 name='city',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Город(а). Несколько через запятую = AND: только анкеты, у которых есть ВСЕ выбранные города (city или work_cities). Спецзначения: "По всей России", "ЮФО", "Любые города онлайн"',
+                description='Город(а). Несколько через запятую = AND. Только анкеты, у которых есть ВСЕ выбранные города (city или work_cities). Значения из filter-choices/cities.',
                 required=False,
             ),
             OpenApiParameter(
@@ -1792,11 +1792,7 @@ class DesignerQuestionnaireListView(views.APIView):
       * Архитектор (architect)
       * Ландшафтный дизайнер (landscape_designer)
       * Светодизайнер (light_designer)
-    - cities: Список уникальных городов из анкет выбранной категории + специальные варианты - Выберете город
-      * По всей России
-      * ЮФО
-      * Любые города онлайн
-      * + города, заявленные членами клуба в выбранной категории
+    - cities: Уникальные города из анкет выбранной категории (только из DesignerQuestionnaire) - Выберете город
     - segments: Сегменты работы (можно выбрать несколько) - Выберете сегмент
       * Эконом (economy)
       * Комфорт (comfort)
@@ -1891,11 +1887,7 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
             city=''
         ).values_list('city', flat=True).distinct().order_by('city')
         cities_list = [{'value': city, 'label': city} for city in cities]
-        
-        # Maxsus variantlar qo'shamiz
-        cities_list.insert(0, {'value': 'По всей России', 'label': 'По всей России'})
-        cities_list.insert(1, {'value': 'ЮФО', 'label': 'ЮФО'})
-        cities_list.insert(2, {'value': 'Любые города онлайн', 'label': 'Любые города онлайн'})
+        # Faqat questionnaire modellarida mavjud shaharlar (maxsus variantlar olib tashlandi)
         
         # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
         # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
@@ -2472,7 +2464,7 @@ class RepairQuestionnaireListView(views.APIView):
                 name='city',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Город(а). Несколько через запятую = AND: только анкеты, у которых есть ВСЕ выбранные города (representative_cities). Спецзначения: "По всей России", "ЮФО", "Любые города онлайн"',
+                description='Город(а). Несколько через запятую = AND. Только анкеты, у которых есть ВСЕ выбранные города (representative_cities). Значения из filter-choices/cities.',
                 required=False,
             ),
             OpenApiParameter(
@@ -3082,11 +3074,7 @@ class DesignerQuestionnaireStatusUpdateView(views.APIView):
       * Комнаты под ключ (rooms_turnkey)
       * Электрика (electrical)
       * ВСЕ (all)
-    - cities: Список уникальных городов из анкет выбранной категории + специальные варианты - Выберете город
-      * По всей России
-      * ЮФО
-      * Любые города онлайн
-      * + города, заявленные членами клуба в выбранной категории
+    - cities: Уникальные города из анкет выбранной категории (только из RepairQuestionnaire representative_cities) - Выберете город
     - segments: Сегменты работы (можно выбрать несколько) - Выберете сегмент
       * Эконом (economy)
       * Комфорт (comfort)
@@ -3190,11 +3178,7 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
                     elif isinstance(city_data, str):
                         all_cities.add(city_data)
         cities_list = [{'value': city, 'label': city} for city in sorted(all_cities)]
-        
-        # Maxsus variantlar qo'shamiz
-        cities_list.insert(0, {'value': 'По всей России', 'label': 'По всей России'})
-        cities_list.insert(1, {'value': 'ЮФО', 'label': 'ЮФО'})
-        cities_list.insert(2, {'value': 'Любые города онлайн', 'label': 'Любые города онлайн'})
+        # Faqat RepairQuestionnaire representative_cities dagi shaharlar (maxsus variantlar olib tashlandi)
         
         # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
         # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
@@ -3427,7 +3411,7 @@ class SupplierQuestionnaireListView(views.APIView):
                 name='city',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Город(а). Несколько через запятую = AND: только анкеты, у которых есть ВСЕ выбранные города (representative_cities). Спецзначения: "По всей России", "ЮФО", "Любые города онлайн"',
+                description='Город(а). Несколько через запятую = AND. Только анкеты, у которых есть ВСЕ выбранные города (representative_cities). Значения из filter-choices/cities.',
                 required=False,
             ),
             OpenApiParameter(
@@ -4066,11 +4050,7 @@ class SupplierQuestionnaireDeleteView(views.APIView):
       * Техника (appliances)
       * Декор (decor)
       * ВСЕ (all)
-    - cities: Список уникальных городов из анкет выбранной категории + специальные варианты - Выберете город
-      * По всей России
-      * ЮФО
-      * Любые города онлайн
-      * + города, заявленные членами клуба в выбранной категории (можно выбрать несколько)
+    - cities: Уникальные города из анкет выбранной категории (только из SupplierQuestionnaire representative_cities) - Выберете город
     - segments: Сегменты работы (можно выбрать несколько) - Выберете сегмент
       * Эконом (economy)
       * Комфорт (comfort)
@@ -4172,11 +4152,7 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
                     elif isinstance(city_data, str):
                         all_cities.add(city_data)
         cities_list = [{'value': city, 'label': city} for city in sorted(all_cities)]
-        
-        # Maxsus variantlar qo'shamiz
-        cities_list.insert(0, {'value': 'По всей России', 'label': 'По всей России'})
-        cities_list.insert(1, {'value': 'ЮФО', 'label': 'ЮФО'})
-        cities_list.insert(2, {'value': 'Любые города онлайн', 'label': 'Любые города онлайн'})
+        # Faqat SupplierQuestionnaire representative_cities dagi shaharlar (maxsus variantlar olib tashlandi)
         
         # Сегменты - Выберите сегмент (ko'p tanlash mumkin)
         # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
