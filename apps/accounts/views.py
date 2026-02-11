@@ -82,6 +82,58 @@ def _q_categories_contains_any(variants):
     return q
 
 
+# Rossiya shaharlari (faqat shu ro'yxatdagi yoki matn ichida topilgan shaharlar filter-choices cities ga chiqadi)
+RUSSIAN_CITIES = frozenset([
+    'Москва', 'Санкт-Петербург', 'Новосибирск', 'Екатеринбург', 'Казань', 'Нижний Новгород',
+    'Челябинск', 'Самара', 'Омск', 'Ростов-на-Дону', 'Уфа', 'Красноярск', 'Воронеж', 'Пермь',
+    'Волгоград', 'Краснодар', 'Саратов', 'Тюмень', 'Тольятти', 'Ижевск', 'Барнаул', 'Ульяновск',
+    'Иркутск', 'Хабаровск', 'Ярославль', 'Владивосток', 'Махачкала', 'Томск', 'Оренбург',
+    'Кемерово', 'Новокузнецк', 'Рязань', 'Астрахань', 'Набережные Челны', 'Пенза', 'Киров',
+    'Липецк', 'Чебоксары', 'Калининград', 'Балашиха', 'Тула', 'Курск', 'Сочи', 'Ставрополь',
+    'Улан-Удэ', 'Тверь', 'Магнитогорск', 'Иваново', 'Брянск', 'Белгород', 'Сургут', 'Владимир',
+    'Нижний Тагил', 'Архангельск', 'Чита', 'Калуга', 'Смоленск', 'Волжский', 'Курган', 'Череповец',
+    'Вологда', 'Саранск', 'Якутск', 'Владикавказ', 'Тамбов', 'Грозный', 'Кострома', 'Петрозаводск',
+    'Нижневартовск', 'Йошкар-Ола', 'Новороссийск', 'Комсомольск-на-Амуре', 'Сыктывкар', 'Нальчик',
+    'Дзержинск', 'Шахты', 'Орск', 'Ангарск', 'Стерлитамак', 'Энгельс', 'Благовещенск', 'Химки',
+    'Подольск', 'Королёв', 'Южно-Сахалинск', 'Псков', 'Мытищи', 'Люберцы', 'Великий Новгород',
+    'Волгодонск', 'Каменск-Уральский', 'Саров', 'Обнинск', 'Элиста', 'Назрань', 'Хасавюрт',
+    'Дербент', 'Каспийск', 'Бугульма', 'Новочеркасск', 'Нефтекамск', 'Димитровград', 'Пятигорск',
+    'Кисловодск', 'Ессентуки', 'Железноводск', 'Минеральные Воды', 'Геленджик', 'Анапа', 'Туапсе',
+    'Адлер', 'Лазаревское', 'Хоста', 'Дагомыс', 'Сириус', 'Таганрог', 'Батайск', 'Шахты',
+    'Новошахтинск', 'Азов', 'Гуково', 'Донецк', 'Зверево', 'Красный Сулин', 'Миллерово',
+    'Сальск', 'Цимлянск', 'Волгодонск', 'Каменск-Шахтинский', 'Новоалтайск', 'Рубцовск',
+    'Бийск', 'Заринск', 'Алейск', 'Горно-Алтайск', 'Магадан', 'Петропавловск-Камчатский',
+    'Южно-Сахалинск', 'Ярославль', 'Рыбинск', 'Переславль-Залесский', 'Углич', 'Тутаев',
+    'Мурманск', 'Североморск', 'Апатиты', 'Мончегорск', 'Кандалакша', 'Кировск',
+    'Нарьян-Мар', 'Салехард', 'Новый Уренгой', 'Ноябрьск', 'Надым', 'Муравленко', 'Губкинский',
+    'Симферополь', 'Севастополь', 'Ялта', 'Керчь', 'Евпатория', 'Феодосия', 'Судак', 'Алушта',
+    'Алупка', 'Гурзуф', 'Ливадия', 'Симеиз', 'Коктебель', 'Бахчисарай', 'Джанкой', 'Саки',
+])
+
+
+def _extract_russian_cities_from_value(value):
+    """
+    Matn yoki manzildan faqat Rossiya shahar nomlarini ajratib oladi.
+    - Qisqa va RUSSIAN_CITIES da bo'lsa -> o'sha shahar.
+    - Uzun manzil (yoki \\n bor) bo'lsa -> matn ichida topilgan barcha RUSSIAN_CITIES.
+    - "test" kabi yoki noma'lum qiymat -> bo'sh set (qaytarmaydi).
+    """
+    if not value or not isinstance(value, str):
+        return set()
+    v = value.strip()
+    if not v:
+        return set()
+    if v in RUSSIAN_CITIES:
+        return {v}
+    if '\n' in v or len(v) > 60:
+        found = set()
+        for city in RUSSIAN_CITIES:
+            if city in v:
+                found.add(city)
+        return found
+    return set()
+
+
 # Password reset tokenlarni saqlash uchun dict (production'da cache yoki DB ishlatish kerak)
 PASSWORD_RESET_TOKENS = {}
 
@@ -1881,13 +1933,16 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
             elif group == 'light_designer':
                 cities_query = cities_query.filter(services__contains=['light_designer'])
         
-        cities = cities_query.exclude(
+        cities_raw = cities_query.exclude(
             city__isnull=True
         ).exclude(
             city=''
-        ).values_list('city', flat=True).distinct().order_by('city')
-        cities_list = [{'value': city, 'label': city} for city in cities]
-        # Faqat questionnaire modellarida mavjud shaharlar (maxsus variantlar olib tashlandi)
+        ).values_list('city', flat=True).distinct()
+        all_cities = set()
+        for city in cities_raw:
+            all_cities |= _extract_russian_cities_from_value(city or '')
+        cities_list = [{'value': city, 'label': city} for city in sorted(all_cities)]
+        # Faqat Rossiya shaharlari (DesignerQuestionnaire city maydonidan ajratib olingan)
         
         # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
         # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
@@ -3174,11 +3229,11 @@ class RepairQuestionnaireFilterChoicesView(views.APIView):
             if isinstance(questionnaire.representative_cities, list):
                 for city_data in questionnaire.representative_cities:
                     if isinstance(city_data, dict) and 'city' in city_data:
-                        all_cities.add(city_data['city'])
+                        all_cities |= _extract_russian_cities_from_value(city_data['city'] or '')
                     elif isinstance(city_data, str):
-                        all_cities.add(city_data)
+                        all_cities |= _extract_russian_cities_from_value(city_data)
         cities_list = [{'value': city, 'label': city} for city in sorted(all_cities)]
-        # Faqat RepairQuestionnaire representative_cities dagi shaharlar (maxsus variantlar olib tashlandi)
+        # Faqat Rossiya shaharlari (RepairQuestionnaire representative_cities dan ajratib olingan)
         
         # Сегменты - Выберете сегмент (ko'p tanlash mumkin)
         # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
@@ -4148,11 +4203,11 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
             if isinstance(questionnaire.representative_cities, list):
                 for city_data in questionnaire.representative_cities:
                     if isinstance(city_data, dict) and 'city' in city_data:
-                        all_cities.add(city_data['city'])
+                        all_cities |= _extract_russian_cities_from_value(city_data['city'] or '')
                     elif isinstance(city_data, str):
-                        all_cities.add(city_data)
+                        all_cities |= _extract_russian_cities_from_value(city_data)
         cities_list = [{'value': city, 'label': city} for city in sorted(all_cities)]
-        # Faqat SupplierQuestionnaire representative_cities dagi shaharlar (maxsus variantlar olib tashlandi)
+        # Faqat Rossiya shaharlari (SupplierQuestionnaire representative_cities dan ajratib olingan)
         
         # Сегменты - Выберите сегмент (ko'p tanlash mumkin)
         # Model'dan olinadi: economy, comfort, business, premium, horeca, medium
