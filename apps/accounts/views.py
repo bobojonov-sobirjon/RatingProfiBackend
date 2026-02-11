@@ -70,6 +70,18 @@ def _normalize_category_label(s):
     return unicodedata.normalize('NFC', s)
 
 
+def _q_categories_contains_any(variants):
+    """categories (JSONField) da berilgan variantlardan biri bo'lsa match. Katta/kichik harf variantlari uchun."""
+    if not variants:
+        return Q(pk__in=[])  # hech narsa match qilmasin
+    from django.db.models import Q
+    q = Q()
+    for v in variants:
+        if v:
+            q |= Q(categories__contains=[v])
+    return q
+
+
 # Password reset tokenlarni saqlash uchun dict (production'da cache yoki DB ishlatish kerak)
 PASSWORD_RESET_TOKENS = {}
 
@@ -2603,7 +2615,7 @@ class RepairQuestionnaireListView(views.APIView):
                 v_norm = _normalize_category_label(v)
                 matched_key = None
                 for label, gk in REPAIR_GROUP_LABEL_TO_KEY.items():
-                    if _normalize_category_label(label) == v_norm:
+                    if _normalize_category_label(label).lower() == v_norm.lower():
                         matched_key = gk
                         break
                 if matched_key is not None:
@@ -2611,26 +2623,50 @@ class RepairQuestionnaireListView(views.APIView):
                         group_keys_from_category.append(matched_key)
                 else:
                     category_values.append(v)
-            # Group filterni qo'llash (category=Черновые работы -> work_list__icontains='черновые')
+            # Group filterni qo'llash: work_list YOKI categories (JSONField); categories da istalgan katta/kichik harf (Capitalize ham)
             if group_keys_from_category:
                 group_q = Q()
                 for grp in group_keys_from_category:
                     if grp == 'turnkey':
-                        group_q |= Q(work_list__icontains='под ключ')
+                        group_q |= (
+                            Q(work_list__icontains='под ключ') |
+                            _q_categories_contains_any(['ПОД КЛЮЧ', 'под ключ', 'Под ключ'])
+                        )
                     elif grp == 'rough_works':
-                        group_q |= Q(work_list__icontains='черновые')
+                        group_q |= (
+                            Q(work_list__icontains='черновые') |
+                            _q_categories_contains_any(['черновые работы', 'Черновые работы', 'Черновые Работы', 'ЧЕРНОВЫЕ РАБОТЫ'])
+                        )
                     elif grp == 'finishing_works':
-                        group_q |= Q(work_list__icontains='чистовые')
+                        group_q |= (
+                            Q(work_list__icontains='чистовые') |
+                            _q_categories_contains_any(['чистовые работы', 'Чистовые работы', 'Чистовые Работы', 'ЧИСТОВЫЕ РАБОТЫ'])
+                        )
                     elif grp == 'plumbing_tiles':
-                        group_q |= Q(work_list__icontains='сантехника') | Q(work_list__icontains='плитка')
+                        group_q |= (
+                            Q(work_list__icontains='сантехника') | Q(work_list__icontains='плитка') |
+                            _q_categories_contains_any(['Сантехника и плитка', 'сантехника и плитка', 'САНТЕХНИКА И ПЛИТКА'])
+                        )
                     elif grp == 'floor':
-                        group_q |= Q(work_list__icontains='пол')
+                        group_q |= (
+                            Q(work_list__icontains='пол') |
+                            _q_categories_contains_any(['Пол', 'пол', 'ПОЛ'])
+                        )
                     elif grp == 'walls':
-                        group_q |= Q(work_list__icontains='стены')
+                        group_q |= (
+                            Q(work_list__icontains='стены') |
+                            _q_categories_contains_any(['Стены', 'стены', 'СТЕНЫ'])
+                        )
                     elif grp == 'rooms_turnkey':
-                        group_q |= Q(work_list__icontains='комнаты') & Q(work_list__icontains='ключ')
+                        group_q |= (
+                            (Q(work_list__icontains='комнаты') & Q(work_list__icontains='ключ')) |
+                            _q_categories_contains_any(['Комнаты под ключ', 'комнаты под ключ', 'КОМНАТЫ ПОД КЛЮЧ'])
+                        )
                     elif grp == 'electrical':
-                        group_q |= Q(work_list__icontains='электрика')
+                        group_q |= (
+                            Q(work_list__icontains='электрика') |
+                            _q_categories_contains_any(['Электрика', 'электрика', 'ЭЛЕКТРИКА'])
+                        )
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
             # Oddiy category (CATEGORY_CHOICES: Ремонтная бригада, Подрядчик, ...)
@@ -3534,7 +3570,7 @@ class SupplierQuestionnaireListView(views.APIView):
                 v_norm = _normalize_category_label(v)
                 matched_key = None
                 for label, gk in SUPPLIER_GROUP_LABEL_TO_KEY.items():
-                    if _normalize_category_label(label) == v_norm:
+                    if _normalize_category_label(label).lower() == v_norm.lower():
                         matched_key = gk
                         break
                 if matched_key is not None:
@@ -3546,17 +3582,35 @@ class SupplierQuestionnaireListView(views.APIView):
                 group_q = Q()
                 for grp in group_keys_from_category:
                     if grp == 'rough_materials':
-                        group_q |= Q(product_assortment__icontains='черновые')
+                        group_q |= (
+                            Q(product_assortment__icontains='черновые') |
+                            _q_categories_contains_any(['Черновые материалы', 'черновые материалы', 'Черновые Материалы', 'ЧЕРНОВЫЕ МАТЕРИАЛЫ'])
+                        )
                     elif grp == 'finishing_materials':
-                        group_q |= Q(product_assortment__icontains='чистовые')
+                        group_q |= (
+                            Q(product_assortment__icontains='чистовые') |
+                            _q_categories_contains_any(['Чистовые материалы', 'чистовые материалы', 'Чистовые Материалы', 'ЧИСТОВЫЕ МАТЕРИАЛЫ'])
+                        )
                     elif grp == 'soft_furniture':
-                        group_q |= Q(product_assortment__icontains='мягкая мебель')
+                        group_q |= (
+                            Q(product_assortment__icontains='мягкая мебель') |
+                            _q_categories_contains_any(['Мягкая мебель', 'мягкая мебель', 'Мягкая Мебель', 'МЯГКАЯ МЕБЕЛЬ'])
+                        )
                     elif grp == 'cabinet_furniture':
-                        group_q |= Q(product_assortment__icontains='корпусная мебель')
+                        group_q |= (
+                            Q(product_assortment__icontains='корпусная мебель') |
+                            _q_categories_contains_any(['Корпусная мебель', 'корпусная мебель', 'Корпусная Мебель', 'КОРПУСНАЯ МЕБЕЛЬ'])
+                        )
                     elif grp == 'appliances':
-                        group_q |= Q(product_assortment__icontains='техника')
+                        group_q |= (
+                            Q(product_assortment__icontains='техника') |
+                            _q_categories_contains_any(['Техника', 'техника', 'ТЕХНИКА'])
+                        )
                     elif grp == 'decor':
-                        group_q |= Q(product_assortment__icontains='декор')
+                        group_q |= (
+                            Q(product_assortment__icontains='декор') |
+                            _q_categories_contains_any(['Декор', 'декор', 'ДЕКОР'])
+                        )
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
             if category_values:
