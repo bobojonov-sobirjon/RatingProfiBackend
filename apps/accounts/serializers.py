@@ -2523,44 +2523,49 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                             data[field] = []
             
             # Supplier: secondary filter JSON fields (rough_materials, finishing_materials, ...)
+            # Form-data da hammasi string keladi — JSON yoki "электрика, су" kabi vergul bilan
             if self.Meta.model.__name__ == 'SupplierQuestionnaire':
+                import json
                 for field in ['rough_materials', 'finishing_materials', 'upholstered_furniture', 'cabinet_furniture', 'technique', 'decor']:
-                    if field in data:
-                        value = data.get(field)
-                        if isinstance(value, list):
-                            parsed_list = []
-                            for item in value:
-                                if item is None:
-                                    continue
-                                if isinstance(item, dict) and 'name' in item:
-                                    parsed_list.append(str(item['name']))
-                                else:
-                                    parsed_list.append(str(item))
-                            if hasattr(data, '_mutable') and not data._mutable:
-                                data._mutable = True
-                            if hasattr(data, 'setlist'):
-                                data.setlist(field, parsed_list)
-                            else:
-                                data[field] = parsed_list
-                        elif isinstance(value, str):
-                            try:
-                                import json
-                                parsed = json.loads(value)
-                                if isinstance(parsed, list):
-                                    parsed_list = [str(it.get('name', it) if isinstance(it, dict) else it) for it in parsed if it is not None]
-                                else:
-                                    parsed_list = []
-                                if hasattr(data, '_mutable') and not data._mutable:
-                                    data._mutable = True
-                                data[field] = parsed_list
-                            except (json.JSONDecodeError, ValueError):
-                                if hasattr(data, '_mutable') and not data._mutable:
-                                    data._mutable = True
-                                data[field] = []
-                        elif value is None or value == '':
-                            if hasattr(data, '_mutable') and not data._mutable:
-                                data._mutable = True
-                            data[field] = []
+                    if field not in data:
+                        continue
+                    value = data.get(field)
+                    if value is None or value == '':
+                        if hasattr(data, '_mutable') and not data._mutable:
+                            data._mutable = True
+                        data[field] = []
+                        continue
+                    # QueryDict ba'zan list qaytaradi (bitta element — string)
+                    if isinstance(value, list):
+                        raw = value[0] if value else ''
+                    else:
+                        raw = value
+                    if not isinstance(raw, str):
+                        raw = str(raw) if raw is not None else ''
+                    raw = raw.strip()
+                    parsed_list = []
+                    if raw:
+                        # 1) JSON array string: ["электрика", "су"] yoki tashqi qo'shtirnoq "[\"электрика\"]"
+                        s = raw.strip().strip('"').strip()
+                        try:
+                            parsed = json.loads(s)
+                            if isinstance(parsed, list):
+                                for it in parsed:
+                                    if it is None:
+                                        continue
+                                    if isinstance(it, dict) and 'name' in it:
+                                        parsed_list.append(str(it['name']))
+                                    else:
+                                        parsed_list.append(str(it))
+                            elif isinstance(parsed, str):
+                                parsed_list = [parsed] if parsed else []
+                        except (json.JSONDecodeError, ValueError):
+                            # 2) Vergul bilan ajratilgan: электрика, су
+                            parsed_list = [x.strip() for x in raw.split(',') if x.strip()]
+                    if hasattr(data, '_mutable') and not data._mutable:
+                        data._mutable = True
+                    # Doim to'liq listni o'rnatamiz (setlist QueryDict da get() ni buzadi)
+                    data[field] = parsed_list
             
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
