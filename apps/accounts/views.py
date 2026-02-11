@@ -12,6 +12,7 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from datetime import date, timedelta
+import unicodedata
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.contrib.auth.models import Group
 
@@ -59,6 +60,15 @@ def _choices_display_to_keys(values_list, choices_tuples):
         return values_list
     display_to_key = {str(label): key for key, label in choices_tuples}
     return [display_to_key.get(v.strip(), v.strip()) for v in values_list]
+
+
+def _normalize_category_label(s):
+    """URL/frontend dan kelgan category ni lug'at bilan solishtirish uchun normalizatsiya (bo'shliq, Unicode)."""
+    if not s or not isinstance(s, str):
+        return s
+    s = s.strip().replace('\xa0', ' ')
+    return unicodedata.normalize('NFC', s)
+
 
 # Password reset tokenlarni saqlash uchun dict (production'da cache yoki DB ishlatish kerak)
 PASSWORD_RESET_TOKENS = {}
@@ -2586,14 +2596,19 @@ class RepairQuestionnaireListView(views.APIView):
         categories_param = request.query_params.get('categories') or request.query_params.get('category')
         if categories_param:
             from django.db.models import Q
-            raw_list = [c.strip() for c in categories_param.split(',')]
+            raw_list = [c.strip() for c in categories_param.split(',') if c.strip()]
             group_keys_from_category = []
             category_values = []
             for v in raw_list:
-                if v in REPAIR_GROUP_LABEL_TO_KEY:
-                    gk = REPAIR_GROUP_LABEL_TO_KEY[v]
-                    if gk != 'all':
-                        group_keys_from_category.append(gk)
+                v_norm = _normalize_category_label(v)
+                matched_key = None
+                for label, gk in REPAIR_GROUP_LABEL_TO_KEY.items():
+                    if _normalize_category_label(label) == v_norm:
+                        matched_key = gk
+                        break
+                if matched_key is not None:
+                    if matched_key != 'all':
+                        group_keys_from_category.append(matched_key)
                 else:
                     category_values.append(v)
             # Group filterni qo'llash (category=Черновые работы -> work_list__icontains='черновые')
@@ -3512,14 +3527,19 @@ class SupplierQuestionnaireListView(views.APIView):
         categories_param = request.query_params.get('categories') or request.query_params.get('category')
         if categories_param:
             from django.db.models import Q
-            raw_list = [c.strip() for c in categories_param.split(',')]
+            raw_list = [c.strip() for c in categories_param.split(',') if c.strip()]
             group_keys_from_category = []
             category_values = []
             for v in raw_list:
-                if v in SUPPLIER_GROUP_LABEL_TO_KEY:
-                    gk = SUPPLIER_GROUP_LABEL_TO_KEY[v]
-                    if gk != 'all':
-                        group_keys_from_category.append(gk)
+                v_norm = _normalize_category_label(v)
+                matched_key = None
+                for label, gk in SUPPLIER_GROUP_LABEL_TO_KEY.items():
+                    if _normalize_category_label(label) == v_norm:
+                        matched_key = gk
+                        break
+                if matched_key is not None:
+                    if matched_key != 'all':
+                        group_keys_from_category.append(matched_key)
                 else:
                     category_values.append(v)
             if group_keys_from_category:
