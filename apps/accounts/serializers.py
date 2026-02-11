@@ -2327,13 +2327,8 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         allow_empty=True,
         help_text="Другие контакты (JSON array). Пример: ['contact1', 'contact2']"
     )
-    # other_contacts kabi — ListField, list_fields da qayta ishlanadi
-    rough_materials = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
-    finishing_materials = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
-    upholstered_furniture = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
-    cabinet_furniture = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
-    technique = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
-    decor = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
+    # rough_materials, ... — modelda JSONField; ListField ishlatmaslik (400 "Not a valid string" sabab).
+    # Faqat to_internal_value da listga o'giramiz, keyin JSONField listni qabul qiladi.
     
     class Meta:
         model = SupplierQuestionnaire
@@ -2478,16 +2473,13 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                                 else:
                                     data[field] = []
             
-            # ListField fields — other_contacts kabi: representative_cities, other_contacts + 6 ta filter field
+            # ListField/JSONField list maydonlar — har doim listga keltirib data ga yozamiz (400 "Not a valid string" oldini olish)
             list_fields = [
                 'representative_cities', 'other_contacts',
                 'rough_materials', 'finishing_materials', 'upholstered_furniture',
                 'cabinet_furniture', 'technique', 'decor',
             ]
             for field in list_fields:
-                if field not in data:
-                    continue
-                # Form-data da bir xil key bir nechta: getlist() barcha qiymatlarni beradi (other_contacts kabi)
                 if hasattr(data, 'getlist'):
                     value = data.getlist(field)
                 else:
@@ -2497,42 +2489,46 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                         data._mutable = True
                     data[field] = []
                     continue
-                # List: bitta element bo'lsa JSON string yoki oddiy string; bir nechta bo'lsa to'g'ridan-to'g'ri
+                # Brauzer ba'zan field[0], field[1] yuboradi — dict keladi
+                if isinstance(value, dict):
+                    try:
+                        keys_sorted = sorted(value.keys(), key=lambda k: int(k) if str(k).isdigit() else k)
+                        parsed_list = [str(value[k]).strip() for k in keys_sorted if value[k] is not None and str(value[k]).strip()]
+                    except (TypeError, ValueError):
+                        parsed_list = list(value.values()) if value else []
+                    parsed_list = [str(x).strip() for x in parsed_list if x]
+                    if hasattr(data, '_mutable') and not data._mutable:
+                        data._mutable = True
+                    data[field] = parsed_list
+                    continue
                 if isinstance(value, list):
                     if len(value) == 1:
                         raw = value[0]
                         if isinstance(raw, str) and raw.strip().startswith('['):
-                            value = raw  # keyin string sifatida JSON parse qilamiz
+                            try:
+                                import json
+                                parsed = json.loads(raw.strip().strip('"'))
+                                parsed_list = [str(x).strip() for x in (parsed if isinstance(parsed, list) else [parsed]) if x is not None and str(x).strip()]
+                            except (json.JSONDecodeError, ValueError):
+                                parsed_list = [x.strip() for x in raw.split(',') if x.strip()]
                         else:
-                            # Bir nechta yoki bitta oddiy string — listni to'g'ridan ishlatamiz
                             parsed_list = [str(x).strip() for x in value if x is not None and str(x).strip()]
-                            if hasattr(data, '_mutable') and not data._mutable:
-                                data._mutable = True
-                            data[field] = parsed_list
-                            continue
                     else:
                         parsed_list = [str(x).strip() for x in value if x is not None and str(x).strip()]
-                        if hasattr(data, '_mutable') and not data._mutable:
-                            data._mutable = True
-                        data[field] = parsed_list
-                        continue
-                # String: JSON yoki vergul bilan ajratilgan (other_contacts kabi)
+                    if hasattr(data, '_mutable') and not data._mutable:
+                        data._mutable = True
+                    data[field] = parsed_list
+                    continue
                 if isinstance(value, str):
                     try:
                         import json
-                        if hasattr(data, '_mutable') and not data._mutable:
-                            data._mutable = True
                         parsed = json.loads(value.strip().strip('"'))
-                        if isinstance(parsed, list):
-                            parsed_list = [str(item.get('name', item)) if isinstance(item, dict) else str(item) for item in parsed if item is not None]
-                        else:
-                            parsed_list = [str(parsed)] if parsed else []
-                        data[field] = parsed_list
+                        parsed_list = [str(x).strip() for x in (parsed if isinstance(parsed, list) else [parsed]) if x is not None and str(x).strip()]
                     except (json.JSONDecodeError, ValueError):
                         parsed_list = [x.strip() for x in value.split(',') if x.strip()]
-                        if hasattr(data, '_mutable') and not data._mutable:
-                            data._mutable = True
-                        data[field] = parsed_list
+                    if hasattr(data, '_mutable') and not data._mutable:
+                        data._mutable = True
+                    data[field] = parsed_list
                     continue
                 if hasattr(data, '_mutable') and not data._mutable:
                     data._mutable = True

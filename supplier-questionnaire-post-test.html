@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POST supplier-questionnaires — test</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 1.25rem; }
+    h2 { font-size: 1rem; margin-top: 24px; }
+    p, li { color: #333; line-height: 1.5; }
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    pre { background: #f5f5f5; padding: 12px; overflow-x: auto; border-radius: 8px; font-size: 13px; }
+    .note { background: #fff8e6; border-left: 4px solid #e6b800; padding: 12px; margin: 16px 0; }
+    button { padding: 10px 16px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    #result { margin-top: 16px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+    .ok { color: #059669; }
+    .err { color: #dc2626; }
+    input[type="text"], select { width: 100%; padding: 8px; margin: 4px 0; }
+    label { display: block; margin-top: 12px; font-weight: 500; }
+    .multi-hint { font-size: 0.85rem; color: #666; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <h1>POST supplier-questionnaires — qanday yuborish kerak</h1>
+
+  <div class="note">
+    <strong>Swaggerda nima uchun bo'sh keladi?</strong><br>
+    Swagger <code>multipart/form-data</code> da har bir maydonni <strong>bitta</strong> qator sifatida yuboradi.
+    <code>rough_materials</code>, <code>finishing_materials</code> kabi list maydonlar uchun backend quyidagilarni qabul qiladi:<br>
+    1) <strong>Bir xil key bir nechta marta</strong> — masalan <code>rough_materials=электрика</code> va <code>rough_materials=су</code> (ikki alohida qator).<br>
+    2) <strong>Bitta string — JSON array</strong> — <code>rough_materials=["электрика","су"]</code>.<br>
+    3) <strong>Vergul bilan</strong> — <code>rough_materials=электрика,су</code>.<br>
+    Swaggerda bitta inputda <code>["электрика", "су"]</code> yozsangiz, ba'zan qo'shtirnoq yoki encoding tufayli backend "correct JSON" deb rad qiladi. Quyidagi HTML orqali to'g'ri yuborishni tekshirishingiz mumkin.
+  </div>
+
+  <h2>1. List maydonlarni qanday yuborish kerak</h2>
+  <ul>
+    <li><strong>rough_materials, finishing_materials, upholstered_furniture, cabinet_furniture, technique, decor</strong> — backend uchta usulni qabul qiladi:
+      <ul>
+        <li>Bir nechta qiymat: <code>rough_materials=электрика</code> va <code>rough_materials=су</code> (FormData da bir xil key ga bir nechta <code>append</code>).</li>
+        <li>Bitta JSON string: <code>rough_materials=["электрика","су"]</code>.</li>
+        <li>Vergul bilan: <code>rough_materials=электрика,су</code>.</li>
+      </ul>
+    </li>
+    <li><strong>representative_cities</strong>, <strong>other_contacts</strong> — xuddi shu qoidalar.</li>
+  </ul>
+
+  <h2>2. Fetch bilan POST (tekshirish uchun)</h2>
+  <p>Quyidagi tugma FormData orqali yuboradi: list maydonlar uchun <strong>bir xil key ga bir nechta qiymat</strong> (<code>append</code> bir nechta marta).</p>
+
+  <label>API URL</label>
+  <input type="text" id="apiUrl" value="https://api.reiting-profi.ru/api/v1/accounts/supplier-questionnaires/" />
+
+  <label>CSRF Token (agar kerak bo'lsa, Swaggerdan oling)</label>
+  <input type="text" id="csrfToken" placeholder="X-CSRFTOKEN qiymati" />
+
+  <button type="button" id="btnSend">POST yuborish (FormData)</button>
+  <pre id="result"></pre>
+
+  <script>
+    document.getElementById('btnSend').onclick = function () {
+      const url = document.getElementById('apiUrl').value.trim();
+      const csrf = document.getElementById('csrfToken').value.trim();
+      const resultEl = document.getElementById('result');
+
+      const form = new FormData();
+      // Oddiy maydonlar
+      form.append('group', 'supplier');
+      form.append('full_name', 'Test User');
+      form.append('phone', '998901234567');
+      form.append('brand_name', 'Test Brand');
+      form.append('email', 'test@example.com');
+      form.append('responsible_person', 'Test');
+      form.append('representative_cities', 'Ташкент');
+      form.append('business_form', 'own_business');
+      form.append('product_assortment', 'Test');
+      form.append('welcome_message', 'Test');
+      form.append('cooperation_terms', 'Test');
+      form.append('delivery_terms', 'Test');
+      form.append('vat_payment', 'yes');
+      form.append('guarantees', 'Test');
+      form.append('designer_contractor_terms', 'Test');
+      form.append('data_processing_consent', 'true');
+      form.append('categories', 'supplier');
+      form.append('speed_of_execution', 'in_stock');
+
+      // List maydonlar — BIR XIL KEY GA BIR NECHTA append (other_contacts kabi)
+      form.append('segments', 'horeca');
+      form.append('segments', 'medium');
+      form.append('magazine_cards', 'hi_home');
+      form.append('representative_cities', 'Ташкент');
+
+      form.append('rough_materials', 'электрика');
+      form.append('rough_materials', 'су');
+      form.append('finishing_materials', 'пол');
+      form.append('finishing_materials', 'сантехника');
+      form.append('upholstered_furniture', 'готовая');
+      form.append('cabinet_furniture', 'готовая');
+      form.append('technique', 'под заказ');
+      form.append('decor', 'ковры');
+
+      const headers = {};
+      if (csrf) headers['X-CSRFTOKEN'] = csrf;
+      headers['Accept'] = 'application/json';
+
+      resultEl.textContent = 'Yuborilmoqda...';
+      fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: form
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function ({ status, data }) {
+          if (status >= 200 && status < 300) {
+            resultEl.className = 'ok';
+            resultEl.textContent = 'Status: ' + status + '\n\n' + JSON.stringify(data, null, 2);
+          } else {
+            resultEl.className = 'err';
+            resultEl.textContent = 'Status: ' + status + '\n\n' + JSON.stringify(data, null, 2);
+          }
+        })
+        .catch(function (e) {
+          resultEl.className = 'err';
+          resultEl.textContent = 'Xato: ' + e.message;
+        });
+    };
+  </script>
+
+  <h2>3. Curl misoli (list maydonlar — bir nechta -F)</h2>
+  <pre>curl -X POST 'https://api.reiting-profi.ru/api/v1/accounts/supplier-questionnaires/' \\
+  -H 'Accept: application/json' \\
+  -H 'Content-Type: multipart/form-data' \\
+  -H 'X-CSRFTOKEN: SIZNING_TOKEN' \\
+  -F 'group=supplier' \\
+  -F 'full_name=Test' \\
+  -F 'phone=998901234567' \\
+  -F 'brand_name=Test' \\
+  -F 'email=test@example.com' \\
+  -F 'responsible_person=Test' \\
+  -F 'business_form=own_business' \\
+  -F 'data_processing_consent=true' \\
+  -F 'categories=supplier' \\
+  -F 'speed_of_execution=in_stock' \\
+  -F 'vat_payment=yes' \\
+  -F 'segments=horeca' \\
+  -F 'magazine_cards=hi_home' \\
+  -F 'representative_cities=Ташкент' \\
+  -F 'rough_materials=электрика' \\
+  -F 'rough_materials=су' \\
+  -F 'finishing_materials=пол' \\
+  -F 'finishing_materials=сантехника' \\
+  -F 'upholstered_furniture=готовая' \\
+  -F 'cabinet_furniture=готовая' \\
+  -F 'technique=под заказ' \\
+  -F 'decor=ковры'</pre>
+
+  <p class="note">
+    <strong>Muhim:</strong> List uchun har bir qiymatni alohida <code>-F 'rough_materials=...'</code> qilib yuboring. Swaggerda bitta inputda faqat bitta qiymat yozilsa, bitta elementli list bo'ladi; bir nechta qiymat kerak bo'lsa, Swagger o'sha formada "multiple" qilmaydi — shuning uchun HTML yoki curl da ko'rsatilgandek bir xil key ni bir nechta marta yuborish kerak.
+  </p>
+</body>
+</html>
