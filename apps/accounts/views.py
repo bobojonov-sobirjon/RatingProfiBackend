@@ -2551,17 +2551,62 @@ class RepairQuestionnaireListView(views.APIView):
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
         
-        # Категории (categories) — frontend value, key ga o'giramiz
+        # Категории (categories) — frontend value. "Черновые работы", "ПОД КЛЮЧ" va boshqalar aslida group (asosiy kategoriya);
+        # agar category/categories shu label'lardan bo'lsa, group filterni (work_list) qo'llaymiz; qolganlari CATEGORY_CHOICES bo'yicha
+        REPAIR_GROUP_LABEL_TO_KEY = {
+            'ПОД КЛЮЧ': 'turnkey',
+            'Черновые работы': 'rough_works',
+            'Чистовые работы': 'finishing_works',
+            'Сантехника и плитка': 'plumbing_tiles',
+            'Пол': 'floor',
+            'Стены': 'walls',
+            'Комнаты под ключ': 'rooms_turnkey',
+            'Электрика': 'electrical',
+            'ВСЕ': 'all',
+        }
         categories_param = request.query_params.get('categories') or request.query_params.get('category')
         if categories_param:
-            categories_list = [c.strip() for c in categories_param.split(',')]
-            categories_list = _choices_display_to_keys(categories_list, RepairQuestionnaire.CATEGORY_CHOICES)
             from django.db.models import Q
-            cat_q = Q()
-            for cat in categories_list:
-                cat_q |= Q(categories__contains=[cat])
-            if cat_q:
-                questionnaires = questionnaires.filter(cat_q)
+            raw_list = [c.strip() for c in categories_param.split(',')]
+            group_keys_from_category = []
+            category_values = []
+            for v in raw_list:
+                if v in REPAIR_GROUP_LABEL_TO_KEY:
+                    gk = REPAIR_GROUP_LABEL_TO_KEY[v]
+                    if gk != 'all':
+                        group_keys_from_category.append(gk)
+                else:
+                    category_values.append(v)
+            # Group filterni qo'llash (category=Черновые работы -> work_list__icontains='черновые')
+            if group_keys_from_category:
+                group_q = Q()
+                for grp in group_keys_from_category:
+                    if grp == 'turnkey':
+                        group_q |= Q(work_list__icontains='под ключ')
+                    elif grp == 'rough_works':
+                        group_q |= Q(work_list__icontains='черновые')
+                    elif grp == 'finishing_works':
+                        group_q |= Q(work_list__icontains='чистовые')
+                    elif grp == 'plumbing_tiles':
+                        group_q |= Q(work_list__icontains='сантехника') | Q(work_list__icontains='плитка')
+                    elif grp == 'floor':
+                        group_q |= Q(work_list__icontains='пол')
+                    elif grp == 'walls':
+                        group_q |= Q(work_list__icontains='стены')
+                    elif grp == 'rooms_turnkey':
+                        group_q |= Q(work_list__icontains='комнаты') & Q(work_list__icontains='ключ')
+                    elif grp == 'electrical':
+                        group_q |= Q(work_list__icontains='электрика')
+                if group_q:
+                    questionnaires = questionnaires.filter(group_q)
+            # Oddiy category (CATEGORY_CHOICES: Ремонтная бригада, Подрядчик, ...)
+            if category_values:
+                categories_list = _choices_display_to_keys(category_values, RepairQuestionnaire.CATEGORY_CHOICES)
+                cat_q = Q()
+                for cat in categories_list:
+                    cat_q |= Q(categories__contains=[cat])
+                if cat_q:
+                    questionnaires = questionnaires.filter(cat_q)
         
         # Выберете город (representative_cities). Несколько через запятую = AND
         city = request.query_params.get('city')
@@ -3421,17 +3466,54 @@ class SupplierQuestionnaireListView(views.APIView):
                 if group_q:
                     questionnaires = questionnaires.filter(group_q)
         
-        # Категории (categories) — frontend value, key ga o'giramiz
+        # Категории (categories) — frontend value. "Черновые материалы", "Мягкая мебель" va boshqalar aslida group (asosiy kategoriя);
+        # agar category/categories shu label'lardan bo'lsa, group filterni (product_assortment) qo'llaymiz; qolganlari CATEGORY_CHOICES bo'yicha
+        SUPPLIER_GROUP_LABEL_TO_KEY = {
+            'Черновые материалы': 'rough_materials',
+            'Чистовые материалы': 'finishing_materials',
+            'Мягкая мебель': 'soft_furniture',
+            'Корпусная мебель': 'cabinet_furniture',
+            'Техника': 'appliances',
+            'Декор': 'decor',
+            'ВСЕ': 'all',
+        }
         categories_param = request.query_params.get('categories') or request.query_params.get('category')
         if categories_param:
-            categories_list = [c.strip() for c in categories_param.split(',')]
-            categories_list = _choices_display_to_keys(categories_list, SupplierQuestionnaire.CATEGORY_CHOICES)
             from django.db.models import Q
-            cat_q = Q()
-            for cat in categories_list:
-                cat_q |= Q(categories__contains=[cat])
-            if cat_q:
-                questionnaires = questionnaires.filter(cat_q)
+            raw_list = [c.strip() for c in categories_param.split(',')]
+            group_keys_from_category = []
+            category_values = []
+            for v in raw_list:
+                if v in SUPPLIER_GROUP_LABEL_TO_KEY:
+                    gk = SUPPLIER_GROUP_LABEL_TO_KEY[v]
+                    if gk != 'all':
+                        group_keys_from_category.append(gk)
+                else:
+                    category_values.append(v)
+            if group_keys_from_category:
+                group_q = Q()
+                for grp in group_keys_from_category:
+                    if grp == 'rough_materials':
+                        group_q |= Q(product_assortment__icontains='черновые')
+                    elif grp == 'finishing_materials':
+                        group_q |= Q(product_assortment__icontains='чистовые')
+                    elif grp == 'soft_furniture':
+                        group_q |= Q(product_assortment__icontains='мягкая мебель')
+                    elif grp == 'cabinet_furniture':
+                        group_q |= Q(product_assortment__icontains='корпусная мебель')
+                    elif grp == 'appliances':
+                        group_q |= Q(product_assortment__icontains='техника')
+                    elif grp == 'decor':
+                        group_q |= Q(product_assortment__icontains='декор')
+                if group_q:
+                    questionnaires = questionnaires.filter(group_q)
+            if category_values:
+                categories_list = _choices_display_to_keys(category_values, SupplierQuestionnaire.CATEGORY_CHOICES)
+                cat_q = Q()
+                for cat in categories_list:
+                    cat_q |= Q(categories__contains=[cat])
+                if cat_q:
+                    questionnaires = questionnaires.filter(cat_q)
         
         # Выберете город (representative_cities). Несколько через запятую = AND
         city = request.query_params.get('city')
