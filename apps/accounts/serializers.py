@@ -2629,18 +2629,21 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                 split_comma = (field != 'representative_cities')  # manzilda vergul bo'lishi mumkin
                 return _any_to_list(raw, parse_json_objects=use_json_objects, split_comma=split_comma) if raw is not None and raw != '' else []
 
+            # QueryDict da data[key]=list qilganda qiymat [[...]] ga o'raladi (double-wrap). Oddiy dict ga o'tkazamiz.
+            if hasattr(data, 'getlist'):
+                _conv = {}
+                for k in data.keys():
+                    vals = data.getlist(k)
+                    _conv[k] = vals[0] if len(vals) == 1 else vals
+                data = _conv
+
             for field in list_fields:
                 # rough_materials, etc: PUT da faqat yuborilganda. representative_cities, other_contacts: doim
                 if field not in list_fields_always and field not in data:
                     continue
-                if hasattr(data, 'getlist'):
-                    raw = data.getlist(field)
-                else:
-                    raw = data.get(field)
-                if hasattr(data, '_mutable') and not data._mutable:
-                    data._mutable = True
+                raw = data.getlist(field) if hasattr(data, 'getlist') else data.get(field)
                 parsed_list = _parse_list_field(field, raw)
-                # JSONField uchun Python list (yangi list eski o'rniga qo'yiladi)
+                # Oddiy dict: to'g'ridan-to'g'ri list qo'yamiz (QueryDict emas, double-wrap yo'q)
                 data[field] = parsed_list
 
             # delivery_terms: string (TextField)
