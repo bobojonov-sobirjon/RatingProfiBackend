@@ -1869,13 +1869,23 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         """Parse JSON fields from form-data"""
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
-            # Multiple choice fields - segments, magazine_cards, categories
+            # Multiple choice fields - segments, magazine_cards, categories, speed_of_execution
+            # speed_of_execution: faqat list qabul qilinadi; string "В наличии" -> ["В наличии"]
             multiple_choice_fields = ['segments', 'magazine_cards', 'categories', 'speed_of_execution']
             for field in multiple_choice_fields:
                 if field in data:
-                    value = data.get(field)
-                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    # QueryDict: bir xil key uchun bir nechta qiymat -> getlist (mas. categories: val1, categories: val2)
+                    if hasattr(data, 'getlist'):
+                        vals = data.getlist(field)
+                        value = vals if len(vals) > 1 else (vals[0] if vals else data.get(field))
+                    else:
+                        value = data.get(field)
+                    # Agar allaqachon list bo'lsa, setlist orqali saqlaymiz
                     if isinstance(value, list):
+                        if hasattr(data, 'setlist') and hasattr(data, '_mutable'):
+                            if not data._mutable:
+                                data._mutable = True
+                            data.setlist(field, [str(x).strip() for x in value if x is not None and str(x).strip()])
                         continue
                     if isinstance(value, str):
                         # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
@@ -2511,19 +2521,25 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         """Parse JSON fields from form-data"""
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
-            # Multiple choice fields - vergul bilan ajratilgan stringlar
-            multiple_choice_fields = ['segments', 'magazine_cards', 'speed_of_execution']
+            # Multiple choice fields - vergul bilan ajratilgan stringlar yoki bitta string -> list
+            # speed_of_execution: string "В наличии" -> ["В наличии"]
+            multiple_choice_fields = ['segments', 'magazine_cards', 'categories', 'speed_of_execution']
             for field in multiple_choice_fields:
                 if field in data:
-                    value = data.get(field)
-                    # Agar allaqachon list bo'lsa, hech narsa qilmaymiz
+                    if hasattr(data, 'getlist'):
+                        vals = data.getlist(field)
+                        value = vals if len(vals) > 1 else (vals[0] if vals else data.get(field))
+                    else:
+                        value = data.get(field)
                     if isinstance(value, list):
+                        if hasattr(data, 'setlist') and hasattr(data, '_mutable'):
+                            if not data._mutable:
+                                data._mutable = True
+                            data.setlist(field, [str(x).strip() for x in value if x is not None and str(x).strip()])
                         continue
                     if isinstance(value, str):
-                        # Agar string bo'lsa, JSON parse qilishga harakat qilamiz
                         try:
                             import json
-                            # QueryDict bo'lsa, mutable copy olish kerak
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             parsed = json.loads(value)

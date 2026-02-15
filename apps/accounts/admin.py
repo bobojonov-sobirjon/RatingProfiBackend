@@ -170,10 +170,15 @@ class DesignerQuestionnaireAdmin(admin.ModelAdmin):
                 'work_cities',
             )
         }),
-        ('Сотрудничество', {
+        ('Сегменты и категории', {
             'fields': (
                 'cooperation_terms',
                 'segments',
+                'categories',
+                'purpose_of_property',
+                'area_of_object',
+                'cost_per_m2',
+                'experience',
             )
         }),
         ('Уникальное торговое предложение', {
@@ -203,6 +208,7 @@ class DesignerQuestionnaireAdmin(admin.ModelAdmin):
             'fields': (
                 'data_processing_consent',
                 'photo',
+                'is_deleted',
             )
         }),
         ('Временные метки', {
@@ -285,8 +291,8 @@ class RepairQuestionnaireAdmin(admin.ModelAdmin):
                 'designer_supplier_terms',
             )
         }),
-        ('Карточки журналов', {
-            'fields': ('magazine_cards',)
+        ('Карточки журналов и категории', {
+            'fields': ('magazine_cards', 'categories', 'speed_of_execution')
         }),
         ('Дополнительная информация', {
             'fields': ('additional_info',)
@@ -295,6 +301,7 @@ class RepairQuestionnaireAdmin(admin.ModelAdmin):
             'fields': (
                 'data_processing_consent',
                 'company_logo',
+                'is_deleted',
             )
         }),
         ('Временные метки', {
@@ -372,17 +379,29 @@ class SupplierQuestionnaireAdmin(admin.ModelAdmin):
                 'designer_contractor_terms',
             )
         }),
-        ('Карточки журналов', {
-            'fields': ('magazine_cards',)
+        ('Карточки журналов и категории', {
+            'fields': ('magazine_cards', 'categories', 'segments')
+        }),
+        ('Ассортимент (JSON list)', {
+            'fields': (
+                'rough_materials',
+                'finishing_materials',
+                'upholstered_furniture',
+                'cabinet_furniture',
+                'technique',
+                'decor',
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Скорость исполнения', {
+            'fields': ('speed_of_execution',)
         }),
         ('Согласие и документы', {
             'fields': (
                 'data_processing_consent',
                 'company_logo',
+                'is_deleted',
             )
-        }),
-        ('Сегменты', {
-            'fields': ('segments',)
         }),
         ('Временные метки', {
             'fields': ('created_at', 'updated_at'),
@@ -463,6 +482,10 @@ class MediaQuestionnaireAdmin(admin.ModelAdmin):
         }),
         ('Логотип компании', {
             'fields': ('company_logo',)
+        }),
+        ('Прочее', {
+            'fields': ('is_deleted',),
+            'classes': ('collapse',)
         }),
         ('Временные метки', {
             'fields': ('created_at', 'updated_at'),
