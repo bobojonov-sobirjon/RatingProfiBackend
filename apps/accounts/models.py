@@ -292,8 +292,8 @@ class DesignerQuestionnaire(models.Model):
     # Площадь объекта — текстовие варианты (не число)
     AREA_OF_OBJECT_CHOICES = [
         ('до 10 м2', 'до 10 м2'),
-        ('до 40 м 2', 'до 40 м 2'),
-        ('до 80 м 2', 'до 80 м 2'),
+        ('до 40 м2', 'до 40 м2'),
+        ('до 80 м2', 'до 80 м2'),
         ('дома', 'дома'),
     ]
     
@@ -548,7 +548,7 @@ class DesignerQuestionnaire(models.Model):
         verbose_name='Назначение недвижимости'
     )
     
-    # Площадь объекта (JSONField: list, до 10 м2, до 40 м 2, до 80 м 2, дома)
+    # Площадь объекта (JSONField: list, до 10 м2, до 40 м2, до 80 м2, дома)
     area_of_object = models.JSONField(
         default=list,
         blank=True,

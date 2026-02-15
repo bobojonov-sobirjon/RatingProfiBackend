@@ -1117,7 +1117,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         child=serializers.CharField(),
         required=False,
         allow_empty=True,
-        help_text="Площадь объекта (массив). Yuboriladi: до 10 м2, до 40 м 2, до 80 м 2, дома. PUT: yangi list eski o'rniga."
+        help_text="Площадь объекта (массив). Yuboriladi: до 10 м2, до 40 м2, до 80 м2, дома. PUT: yangi list eski o'rniga."
     )
     cost_per_m2 = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Стоимость за м²: До 1500 р, до 2500р, до 4000 р, свыше 4000 р")
     experience = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Опыт работы: Новичок, До 2 лет, 2-5 лет, 5-10 лет, Свыше 10 лет")
@@ -1449,14 +1449,19 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         return value
 
     def validate_area_of_object(self, value):
-        """Проверка area_of_object - list of valid values"""
+        """Проверка area_of_object - list of valid values. Нормализация: "м 2" -> "м2"."""
         if not isinstance(value, list):
             return []
         valid = [c[0] for c in DesignerQuestionnaire.AREA_OF_OBJECT_CHOICES]
+        normalized = []
         for v in value:
-            if v not in valid:
+            # Frontend "до 40 м2" va eski "до 40 м 2" qabul qilish
+            v_norm = str(v).replace('м 2', 'м2').strip() if v else ''
+            if v_norm and v_norm not in valid:
                 raise serializers.ValidationError(f"Неверная площадь объекта: {v}")
-        return value
+            if v_norm:
+                normalized.append(v_norm)
+        return normalized
 
 
 class RepairQuestionnaireSerializer(serializers.ModelSerializer):
