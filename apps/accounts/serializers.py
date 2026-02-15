@@ -2329,6 +2329,18 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Категории (multiple choice). Пример: ['supplier', 'exhibition_hall']"
     )
     
+    representative_cities = serializers.ListField(
+        child=serializers.CharField(required=False, allow_blank=True),
+        required=False,
+        allow_empty=True,
+        help_text="Города представительств. Массив строк. Form-data: bir nechta key bilan yoki JSON."
+    )
+    other_contacts = serializers.ListField(
+        child=serializers.DictField(required=False, allow_null=True),
+        required=False,
+        allow_empty=True,
+        help_text="Дополнительные контакты. Массив объектов: [{\"type\":\"telegram\",\"value\":\"...\"}]. Form-data: bir nechta key bilan."
+    )
     delivery_terms = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -2533,23 +2545,34 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                 'rough_materials', 'finishing_materials', 'upholstered_furniture',
                 'cabinet_furniture', 'technique', 'decor',
             ]
+            # representative_cities, other_contacts — doim parse qilamiz (POST create uchun)
+            # rough_materials va boshqalari — faqat PUT da yuborilganda
+            list_fields_always = ['representative_cities', 'other_contacts']
 
-            def _any_to_list(v):
+            def _any_to_list(v, parse_json_objects=False):
                 if v is None or v == '': return []
                 if isinstance(v, list):
                     out = []
                     for x in v:
                         if isinstance(x, (list, tuple)):
-                            out.extend(_any_to_list(x))
+                            out.extend(_any_to_list(x, parse_json_objects))
                         elif x is not None and str(x).strip():
-                            out.append(str(x).strip())
+                            s = str(x).strip()
+                            if parse_json_objects:
+                                try:
+                                    parsed = _json.loads(s)
+                                    out.append(parsed if isinstance(parsed, dict) else s)
+                                except (_json.JSONDecodeError, ValueError):
+                                    out.append(s)
+                            else:
+                                out.append(s)
                     return out
                 if isinstance(v, dict):
                     try:
                         keys = sorted(v.keys(), key=lambda k: int(k) if str(k).isdigit() else k)
                         out = []
                         for k in keys:
-                            out.extend(_any_to_list(v[k]))
+                            out.extend(_any_to_list(v[k], parse_json_objects))
                         return out
                     except (TypeError, ValueError):
                         return [str(x).strip() for x in v.values() if x is not None and str(x).strip()]
@@ -2558,14 +2581,18 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                     if not s: return []
                     try:
                         p = _json.loads(s)
-                        return _any_to_list(p)
+                        return _any_to_list(p, parse_json_objects)
                     except (_json.JSONDecodeError, ValueError):
                         return [x.strip() for x in s.split(',') if x.strip()]
                 return [str(v).strip()] if str(v).strip() else []
 
+            def _parse_list_field(field, raw):
+                use_json_objects = (field == 'other_contacts')
+                return _any_to_list(raw, parse_json_objects=use_json_objects) if raw is not None and raw != '' else []
+
             for field in list_fields:
-                # PUT: faqat request da yuborilgan fieldlarni yangilaymiz (yangi list eski o'rniga)
-                if field not in data:
+                # rough_materials, etc: PUT da faqat yuborilganda. representative_cities, other_contacts: doim
+                if field not in list_fields_always and field not in data:
                     continue
                 if hasattr(data, 'getlist'):
                     raw = data.getlist(field)
@@ -2573,7 +2600,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                     raw = data.get(field)
                 if hasattr(data, '_mutable') and not data._mutable:
                     data._mutable = True
-                parsed_list = _any_to_list(raw) if raw is not None and raw != '' else []
+                parsed_list = _parse_list_field(field, raw)
                 # JSONField uchun Python list (yangi list eski o'rniga qo'yiladi)
                 data[field] = parsed_list
 
