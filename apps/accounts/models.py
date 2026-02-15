@@ -925,11 +925,11 @@ class SupplierQuestionnaire(models.Model):
     ]
     
     SPEED_OF_EXECUTION_CHOICES = [
-        ('in_stock', 'В наличии'),
-        ('up_to_2_weeks', 'До 2х недель'),
-        ('up_to_1_month', 'До 1 месяца'),
-        ('up_to_3_months', 'До 3х месяцев'),
-        ('not_important', 'Не важно'),
+        ('in_stock', 'в наличии'),
+        ('up_to_2_weeks', 'до 2х недель'),
+        ('up_to_1_month', 'до 1 месяца'),
+        ('up_to_3_months', 'до 3х месяцев'),
+        ('not_important', 'не важно'),
     ]
     
     # Группа
