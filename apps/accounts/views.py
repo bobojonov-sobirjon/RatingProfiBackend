@@ -1525,7 +1525,7 @@ class UserPublicProfileView(views.APIView):
     - photo: Прикрепите ваше фото для личного кабинета (необязательное, файл)
     - categories: Категории (массив, необязательное). Варианты: residential_designer, commercial_designer, decorator, home_stager, architect, landscape_designer, light_designer
     - purpose_of_property: Назначение недвижимости (массив, необязательное). Варианты: permanent_residence, for_rent, commercial, horeca
-    - area_of_object: Площадь объекта (текст: до 10 м2, до 40 м 2, до 80 м 2, дома)
+    - area_of_object: Площадь объекта (массив). Yuboriladi: до 10 м2, до 40 м 2, до 80 м 2, дома. PUT: yangi list eski o'rniga.
     - cost_per_m2: Стоимость за м² (текст: До 1500 р, до 2500р, до 4000 р, свыше 4000 р)
     - experience: Опыт работы (текст: Новичок, До 2 лет, 2-5 лет, 5-10 лет, Свыше 10 лет)
     
@@ -1732,20 +1732,17 @@ class DesignerQuestionnaireListView(views.APIView):
             if purpose_q:
                 questionnaires = questionnaires.filter(purpose_q)
         
-        # Площадь объекта (object_area → area_of_object CharField, текстовие варианты)
+        # Площадь объекта (object_area → area_of_object JSONField list)
         object_area = request.query_params.get('object_area')
         if object_area:
-            areas_list = [a.strip() for a in object_area.split(',')]
+            areas_list = [a.strip() for a in object_area.split(',') if a.strip()]
+            areas_list = _choices_display_to_keys(areas_list, DesignerQuestionnaire.AREA_OF_OBJECT_CHOICES)
             from django.db.models import Q
             area_q = Q()
-            area_values = ['до 10 м2', 'до 40 м 2', 'до 80 м 2', 'дома']
             for area in areas_list:
                 if area == 'not_important':
                     continue
-                if area in area_values:
-                    area_q |= Q(area_of_object=area)
-                else:
-                    area_q |= Q(service_packages_description__icontains=area)
+                area_q |= Q(area_of_object__contains=[area])
             if area_q:
                 questionnaires = questionnaires.filter(area_q)
         
@@ -2469,7 +2466,7 @@ class RepairQuestionnaireDeleteView(views.APIView):
       * no - Нет
       * other - Другое
     - categories: Категории (массив, необязательное). Варианты: repair_team, contractor, finishing, electrical, plumbing, other
-    - speed_of_execution: Скорость исполнения (необязательное). Варианты: advance_booking, quick_start, not_important
+    - speed_of_execution: Скорость исполнения (массив, необязательное). Yuboriladi: Предварительная запись, Быстрый старт, Не важно. PUT: yangi list eski o'rniga.
     - additional_info: Дополнительная информация (необязательное)
     - data_processing_consent: Согласие на обработку данных (обязательное, boolean)
     - company_logo: Логотип компании (shaxsiy kabinet uchun) (необязательное, файл)
@@ -2547,9 +2544,8 @@ class RepairQuestionnaireListView(views.APIView):
                 name='execution_speed',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Скорость исполнения (advance_booking, quick_start, not_important)',
+                description='Скорость исполнения. Yuboriladi: Предварительная запись, Быстрый старт, Не важно. Bir nechta vergul bilan.',
                 required=False,
-                enum=['advance_booking', 'quick_start', 'not_important'],
             ),
             OpenApiParameter(
                 name='cooperation_terms',
@@ -2792,7 +2788,7 @@ class RepairQuestionnaireListView(views.APIView):
             if cards_q:
                 questionnaires = questionnaires.filter(cards_q)
         
-        # Скорость исполнения (execution_speed) — frontend value, key ga o'giramiz
+        # Скорость исполнения (execution_speed) — JSONField list, __contains bilan
         execution_speed = request.query_params.get('execution_speed')
         if execution_speed:
             speeds_list = [s.strip() for s in execution_speed.split(',') if s.strip()]
@@ -2801,7 +2797,7 @@ class RepairQuestionnaireListView(views.APIView):
             speed_q = Q()
             for s in speeds_list:
                 if s != 'not_important':
-                    speed_q |= Q(speed_of_execution=s)
+                    speed_q |= Q(speed_of_execution__contains=[s])
             if speed_q:
                 questionnaires = questionnaires.filter(speed_q)
         
@@ -3399,7 +3395,7 @@ class RepairQuestionnaireStatusUpdateView(views.APIView):
     - instagram: Instagram (необязательное)
     - website: Ваш сайт (Veb-sayt) (необязательное, URL)
     - other_contacts: Другое (Boshqa) - дополнительные контакты (массив, необязательное)
-    - delivery_terms: Сроки поставки и формат работы (необязательное)
+    - delivery_terms: Сроки поставки и формат работы (string)
     - vat_payment: Возможна ли оплата с учётом НДС? (необязательное). Варианты:
       * yes - Да
       * no - Нет
@@ -3495,7 +3491,7 @@ class SupplierQuestionnaireListView(views.APIView):
                 name='execution_speed',
                 type=str,
                 location=OpenApiParameter.QUERY,
-                description='Скорость исполнения (in_stock, up_to_2_weeks, up_to_1_month, up_to_3_months, not_important). Можно указать несколько через запятую',
+                description='Скорость исполнения. Yuboriladi: В наличии, До 2х недель, До 1 месяца, До 3х месяцев, Не важно. Bir nechta vergul bilan.',
                 required=False,
             ),
             OpenApiParameter(
@@ -3724,7 +3720,7 @@ class SupplierQuestionnaireListView(views.APIView):
             if cards_q:
                 questionnaires = questionnaires.filter(cards_q)
         
-        # Скорость исполнения (execution_speed) — frontend value, key ga o'giramiz
+        # Скорость исполнения (execution_speed) — JSONField list, __contains bilan
         execution_speed = request.query_params.get('execution_speed')
         if execution_speed:
             speeds_list = [s.strip() for s in execution_speed.split(',')]
@@ -3733,7 +3729,7 @@ class SupplierQuestionnaireListView(views.APIView):
             speed_q = Q()
             for speed in speeds_list:
                 if speed != 'not_important':
-                    speed_q |= Q(speed_of_execution=speed)
+                    speed_q |= Q(speed_of_execution__contains=[speed])
             if speed_q:
                 questionnaires = questionnaires.filter(speed_q)
         
@@ -4262,25 +4258,25 @@ class SupplierQuestionnaireFilterChoicesView(views.APIView):
 # Дополнительный фильтр для каждой из основных категорий (статичные значения для secondory_filter_data_supplier)
 SUPPLIER_SECONDARY_FILTER_DATA = {
     'rough_materials': [
-        {'name': 'виды материалов'}, {'name': 'электрика'}, {'name': 'су'}, {'name': 'пол'},
+        {'name': 'уличные материалы'}, {'name': 'электрика'}, {'name': 'су'}, {'name': 'пол'},
         {'name': 'стены'}, {'name': 'потолок'}, {'name': 'прочее'},
     ],
     'finishing_materials': [
-        {'name': 'категория товара'}, {'name': 'сантехника'}, {'name': 'пол'}, {'name': 'потолок'},
+        {'name': 'уличные материалы'}, {'name': 'сантехника'}, {'name': 'пол'}, {'name': 'потолок'},
         {'name': 'стены'}, {'name': 'декоративные элементы'}, {'name': 'двери'}, {'name': 'камень'},
         {'name': 'электрика'}, {'name': 'стеновые панели'},
     ],
     'upholstered_furniture': [
-        {'name': 'готовая'}, {'name': 'под заказ'}, {'name': 'мебель по эскизам'}, {'name': 'стулья'},
-        {'name': 'спальни'}, {'name': 'детские'}, {'name': 'гостинные'}, {'name': 'хорика'},
+        {'name': 'в наличии'}, {'name': 'под заказ'}, {'name': 'мебель по эскизам'}, {'name': 'стулья'},
+        {'name': 'спальни'}, {'name': 'детские'}, {'name': 'гостиные'}, {'name': 'HoReCa'},
         {'name': 'уличная мебель'}, {'name': 'матрасы и подушки'},
     ],
     'cabinet_furniture': [
         {'name': 'готовая'}, {'name': 'под заказ'}, {'name': 'мебель по эскизам'}, {'name': 'столы и стулья'},
-        {'name': 'шкафы и гардеробные'}, {'name': 'хорика'}, {'name': 'уличная мебель'},
+        {'name': 'шкафы и гардеробные'}, {'name': 'HoReCa'}, {'name': 'уличная мебель'},
     ],
     'technique': [
-        {'name': 'под заказ'}, {'name': 'есть склад'}, {'name': 'кухня'}, {'name': 'кондиционер'},
+        {'name': 'под заказ'}, {'name': 'в наличии'}, {'name': 'кухня'}, {'name': 'кондиционер'},
         {'name': 'умный дом'}, {'name': 'свет'},
     ],
     'decor': [

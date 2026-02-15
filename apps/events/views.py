@@ -9,6 +9,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .models import UpcomingEvent
 from .serializers import UpcomingEventSerializer
+from apps.accounts.serializers import _is_empty_name, UserPublicSerializer
 
 
 @extend_schema(
@@ -543,11 +544,14 @@ class RatingPageView(views.APIView):
             key = f"Дизайн_{designer.id}"
             rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
             
-            # Faqat kerakli field'lar
+            # Faqat kerakli field'lar. "без имени" bo'lsa full_name_en ishlatiladi
+            d_name = designer.full_name or (getattr(designer, 'full_name_en', None) or '')
+            if _is_empty_name(d_name):
+                d_name = (getattr(designer, 'full_name_en', None) or '') or designer.full_name or ''
             result.append({
                 'request_name': 'DesignerQuestionnaire',
                 'id': designer.id,
-                'name': designer.full_name,
+                'name': d_name,
                 'group': 'Дизайн',
                 'total_rating_count': rating_stats['total_positive'],
                 'positive_rating_count': rating_stats['total_positive'],
@@ -570,11 +574,14 @@ class RatingPageView(views.APIView):
             key = f"Ремонт_{repair.id}"
             rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
             
-            # Faqat kerakli field'lar
+            # Faqat kerakli field'lar. "без имени" bo'lsa brand_name ishlatiladi
+            r_name = repair.full_name or repair.brand_name
+            if _is_empty_name(r_name):
+                r_name = repair.brand_name or ''
             result.append({
                 'request_name': 'RepairQuestionnaire',
                 'id': repair.id,
-                'name': repair.full_name or repair.brand_name,
+                'name': r_name,
                 'group': 'Ремонт',
                 'total_rating_count': rating_stats['total_positive'],
                 'positive_rating_count': rating_stats['total_positive'],
@@ -597,11 +604,14 @@ class RatingPageView(views.APIView):
             key = f"Поставщик_{supplier.id}"
             rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
             
-            # Faqat kerakli field'lar
+            # Faqat kerakli field'lar. "без имени" bo'lsa brand_name ishlatiladi
+            s_name = supplier.full_name or supplier.brand_name
+            if _is_empty_name(s_name):
+                s_name = supplier.brand_name or ''
             result.append({
                 'request_name': 'SupplierQuestionnaire',
                 'id': supplier.id,
-                'name': supplier.full_name or supplier.brand_name,
+                'name': s_name,
                 'group': 'Поставщик',
                 'total_rating_count': rating_stats['total_positive'],
                 'positive_rating_count': rating_stats['total_positive'],
@@ -624,11 +634,14 @@ class RatingPageView(views.APIView):
             key = f"Медиа_{media_item.id}"
             rating_stats = ratings_cache.get(key, {'total_positive': 0, 'total_constructive': 0})
             
-            # Faqat kerakli field'lar
+            # Faqat kerakli field'lar. "без имени" bo'lsa brand_name ishlatiladi
+            m_name = media_item.full_name or media_item.brand_name
+            if _is_empty_name(m_name):
+                m_name = media_item.brand_name or ''
             result.append({
                 'request_name': 'MediaQuestionnaire',
                 'id': media_item.id,
-                'name': media_item.full_name or media_item.brand_name,
+                'name': m_name,
                 'group': 'Медиа',
                 'total_rating_count': rating_stats['total_positive'],
                 'positive_rating_count': rating_stats['total_positive'],
@@ -1210,8 +1223,8 @@ class AllReportsView(views.APIView):
                 }
                 group = role_display_map.get(report.user.role, report.user.role or 'Не указано')
             
-            # Full name olish
-            name = report.user.full_name or report.user.phone or 'Не указано'
+            # Full name olish. "без имени" bo'lsa anketadagi brand_name ishlatiladi
+            name = UserPublicSerializer(report.user).data.get('company_name') or report.user.phone or 'Не указано'
             
             results.append({
                 'name': name,

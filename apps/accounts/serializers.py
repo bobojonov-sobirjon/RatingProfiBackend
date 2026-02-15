@@ -686,11 +686,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
 
 
+# "без имени" — bo'sh qiymat sifatida; anketadagi brand_name bilan almashtiriladi
+EMPTY_NAME_PLACEHOLDER = 'без имени'
+
+
+def _is_empty_name(val):
+    """Qiymat 'без имени' yoki bo'sh bo'lsa True."""
+    return not (val or '').strip() or (val or '').strip().lower() == EMPTY_NAME_PLACEHOLDER
+
+
 class UserPublicSerializer(serializers.ModelSerializer):
     """
     Umumiy ko'rinish uchun foydalanuvchi serializer
     (Boshqa foydalanuvchilar ko'rish uchun).
     company_name: agar null bo'lsa — full_name yoki anketadagi ism/brand_name chiqadi.
+    "без имени" — bo'sh deb hisoblanadi, anketadagi brand_name qo'yiladi.
     """
     role_display = serializers.CharField(
         source='get_role_display',
@@ -699,6 +709,7 @@ class UserPublicSerializer(serializers.ModelSerializer):
     
     groups = serializers.SerializerMethodField()
     company_name = serializers.SerializerMethodField()
+    full_name = serializers.SerializerMethodField()
     
     def get_groups(self, obj):
         return obj.groups.values_list('name', flat=True)
@@ -767,15 +778,11 @@ class UserPublicSerializer(serializers.ModelSerializer):
                         return val or None
         return None
 
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_company_name(self, obj):
-        """
-        company_name: profil → full_name → user guruhiga tegishli anketa.
-        Дизайн → full_name; Ремонт/Поставщик/Медиа → doim brand_name.
-        """
-        if obj.company_name:
+    def _get_display_name_from_user_or_questionnaire(self, obj):
+        """User yoki anketadan display name olish. 'без имени' bo'sh hisoblanadi."""
+        if obj.company_name and not _is_empty_name(obj.company_name):
             return obj.company_name
-        if obj.full_name:
+        if obj.full_name and not _is_empty_name(obj.full_name):
             return obj.full_name
         phone = (getattr(obj, 'phone', None) or '').strip()
         email = (getattr(obj, 'email', None) or '').strip().lower() or None
@@ -783,6 +790,22 @@ class UserPublicSerializer(serializers.ModelSerializer):
         if not phone_digits and not email:
             return None
         return self._find_questionnaire_for_user(obj, phone_digits, email)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_company_name(self, obj):
+        """
+        company_name: profil → full_name → user guruhiga tegishli anketa.
+        Дизайн → full_name; Ремонт/Поставщик/Медиа → doim brand_name.
+        "без имени" — bo'sh deb hisoblanadi, anketadagi brand_name qo'yiladi.
+        """
+        return self._get_display_name_from_user_or_questionnaire(obj)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_full_name(self, obj):
+        """full_name: agar 'без имени' bo'lsa anketadagi brand_name qo'yiladi."""
+        if obj.full_name and not _is_empty_name(obj.full_name):
+            return obj.full_name
+        return self._get_display_name_from_user_or_questionnaire(obj)
     
     class Meta:
         model = User
@@ -1090,7 +1113,12 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Назначение недвижимости (multiple choice). Пример: ['permanent_residence', 'commercial']"
     )
     
-    area_of_object = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Площадь объекта: до 10 м2, до 40 м 2, до 80 м 2, дома")
+    area_of_object = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Площадь объекта (массив). Yuboriladi: до 10 м2, до 40 м 2, до 80 м 2, дома. PUT: yangi list eski o'rniga."
+    )
     cost_per_m2 = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Стоимость за м²: До 1500 р, до 2500р, до 4000 р, свыше 4000 р")
     experience = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Опыт работы: Новичок, До 2 лет, 2-5 лет, 5-10 лет, Свыше 10 лет")
     
@@ -1122,7 +1150,12 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         if 'work_type' in data and data['work_type'] is not None:
             data['work_type'] = instance.get_work_type_display()
         
-        # experience, area_of_object, cost_per_m2 — уже строки (текстовие варианты), возвращаем как есть
+        # area_of_object — list, convert keys to display
+        if 'area_of_object' in data and data['area_of_object'] is not None:
+            choices_dict = dict(DesignerQuestionnaire.AREA_OF_OBJECT_CHOICES)
+            data['area_of_object'] = [choices_dict.get(k, k) for k in (data['area_of_object'] or [])]
+        
+        # experience, cost_per_m2 — уже строки (текстовие варианты), возвращаем как есть
         
         # Convert vat_payment key to display name
         if 'vat_payment' in data and data['vat_payment'] is not None:
@@ -1232,7 +1265,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
             # Multiple choice fields - vergul bilan ajratilgan stringlar
-            multiple_choice_fields = ['services', 'segments', 'categories', 'purpose_of_property']
+            multiple_choice_fields = ['services', 'segments', 'categories', 'purpose_of_property', 'area_of_object']
             for field in multiple_choice_fields:
                 if field in data:
                     value = data.get(field)
@@ -1375,7 +1408,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             _choice_display_to_key_list(data, 'categories', DesignerQuestionnaire.CATEGORY_CHOICES)
             _choice_display_to_key_list(data, 'purpose_of_property', DesignerQuestionnaire.PURPOSE_OF_PROPERTY_CHOICES)
             _choice_display_to_key_single(data, 'work_type', DesignerQuestionnaire.WORK_TYPE_CHOICES)
-            _choice_display_to_key_single(data, 'area_of_object', DesignerQuestionnaire.AREA_OF_OBJECT_CHOICES)
+            _choice_display_to_key_list(data, 'area_of_object', DesignerQuestionnaire.AREA_OF_OBJECT_CHOICES)
             _choice_display_to_key_single(data, 'cost_per_m2', DesignerQuestionnaire.COST_PER_M2_CHOICES)
             _choice_display_to_key_single(data, 'experience', DesignerQuestionnaire.EXPERIENCE_CHOICES)
             _choice_display_to_key_single(data, 'vat_payment', DesignerQuestionnaire.VAT_PAYMENT_CHOICES)
@@ -1413,6 +1446,16 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         """Проверка other_contacts"""
         if not isinstance(value, list):
             return []
+        return value
+
+    def validate_area_of_object(self, value):
+        """Проверка area_of_object - list of valid values"""
+        if not isinstance(value, list):
+            return []
+        valid = [c[0] for c in DesignerQuestionnaire.AREA_OF_OBJECT_CHOICES]
+        for v in value:
+            if v not in valid:
+                raise serializers.ValidationError(f"Неверная площадь объекта: {v}")
         return value
 
 
@@ -1684,7 +1727,12 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Категории (multiple choice). Пример: ['repair_team', 'contractor']"
     )
     
-    speed_of_execution = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Скорость исполнения: advance_booking, quick_start, not_important")
+    speed_of_execution = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Скорость исполнения (multiple). Yuboriladi: Предварительная запись, Быстрый старт, Не важно. PUT: yangi list yuborilsa eski o'rniga yangi."
+    )
     
     def to_representation(self, instance):
         """Convert choice keys to display names in response"""
@@ -1704,9 +1752,10 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         if 'business_form' in data and data['business_form'] is not None:
             data['business_form'] = instance.get_business_form_display()
         
-        # Convert speed_of_execution key to display name
+        # Convert speed_of_execution keys to display names (list)
         if 'speed_of_execution' in data and data['speed_of_execution'] is not None:
-            data['speed_of_execution'] = instance.get_speed_of_execution_display() if hasattr(instance, 'get_speed_of_execution_display') else data['speed_of_execution']
+            choices_dict = dict(RepairQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
+            data['speed_of_execution'] = [choices_dict.get(k, k) for k in (data['speed_of_execution'] or [])]
         
         # Convert magazine_cards keys to display names
         if 'magazine_cards' in data and data['magazine_cards'] is not None:
@@ -1821,7 +1870,7 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
             # Multiple choice fields - segments, magazine_cards, categories
-            multiple_choice_fields = ['segments', 'magazine_cards', 'categories']
+            multiple_choice_fields = ['segments', 'magazine_cards', 'categories', 'speed_of_execution']
             for field in multiple_choice_fields:
                 if field in data:
                     value = data.get(field)
@@ -1962,7 +2011,7 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
             _choice_display_to_key_list(data, 'magazine_cards', RepairQuestionnaire.MAGAZINE_CARD_CHOICES)
             _choice_display_to_key_list(data, 'categories', RepairQuestionnaire.CATEGORY_CHOICES)
             _choice_display_to_key_single(data, 'business_form', RepairQuestionnaire.BUSINESS_FORM_CHOICES)
-            _choice_display_to_key_single(data, 'speed_of_execution', RepairQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
+            _choice_display_to_key_list(data, 'speed_of_execution', RepairQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
             _choice_display_to_key_single(data, 'vat_payment', RepairQuestionnaire.VAT_PAYMENT_CHOICES)
             _choice_display_to_key_single(data, 'status', RepairQuestionnaire.STATUS_CHOICES)
             _choice_display_to_key_single(data, 'group', QUESTIONNAIRE_GROUP_CHOICES)
@@ -1999,6 +2048,16 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         """Проверка other_contacts"""
         if not isinstance(value, list):
             return []
+        return value
+
+    def validate_speed_of_execution(self, value):
+        """Проверка speed_of_execution - list of valid keys"""
+        if not isinstance(value, list):
+            return []
+        valid = [c[0] for c in RepairQuestionnaire.SPEED_OF_EXECUTION_CHOICES]
+        for v in value:
+            if v not in valid:
+                raise serializers.ValidationError(f"Неверная скорость исполнения: {v}")
         return value
 
 
@@ -2196,7 +2255,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         """
         terms_data = []
         
-        # В какие периоды осуществляется поставка товара
+        # В какие периоды осуществляется поставка товара (TextField - string)
         if obj.delivery_terms:
             terms_data.append({
                 'type': 'delivery_periods',
@@ -2270,7 +2329,18 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Категории (multiple choice). Пример: ['supplier', 'exhibition_hall']"
     )
     
-    speed_of_execution = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Скорость исполнения: in_stock, up_to_2_weeks, up_to_1_month, up_to_3_months, not_important")
+    delivery_terms = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="Сроки поставки и формат работы (string)"
+    )
+    speed_of_execution = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Скорость исполнения (multiple). Yuboriladi: В наличии, До 2х недель, До 1 месяца, До 3х месяцев, Не важно. PUT: yangi list yuborilsa eski o'rniga yangi."
+    )
     
     def to_representation(self, instance):
         """Convert choice keys to display names in response"""
@@ -2290,9 +2360,10 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         if 'business_form' in data and data['business_form'] is not None:
             data['business_form'] = instance.get_business_form_display()
         
-        # Convert speed_of_execution key to display name
+        # Convert speed_of_execution keys to display names (list)
         if 'speed_of_execution' in data and data['speed_of_execution'] is not None:
-            data['speed_of_execution'] = instance.get_speed_of_execution_display() if hasattr(instance, 'get_speed_of_execution_display') else data['speed_of_execution']
+            choices_dict = dict(SupplierQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
+            data['speed_of_execution'] = [choices_dict.get(k, k) for k in (data['speed_of_execution'] or [])]
         
         # Convert magazine_cards keys to display names
         if 'magazine_cards' in data and data['magazine_cards'] is not None:
@@ -2398,7 +2469,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         # Form-data orqali kelganda, JSON maydonlar string sifatida keladi
         if hasattr(data, 'get'):
             # Multiple choice fields - vergul bilan ajratilgan stringlar
-            multiple_choice_fields = ['segments', 'magazine_cards']
+            multiple_choice_fields = ['segments', 'magazine_cards', 'speed_of_execution']
             for field in multiple_choice_fields:
                 if field in data:
                     value = data.get(field)
@@ -2501,6 +2572,16 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                     data._mutable = True
                 parsed_list = _any_to_list(raw) if raw is not None and raw != '' else []
                 data[field] = _json.dumps(parsed_list, ensure_ascii=False)
+
+            # delivery_terms: string (TextField)
+            if 'delivery_terms' in data:
+                raw = data.get('delivery_terms')
+                if raw is not None and isinstance(raw, (list, dict)):
+                    data['delivery_terms'] = str(raw)  # list/dict kelsa string ga
+                elif raw == '' or raw is None:
+                    if hasattr(data, '_mutable') and not data._mutable:
+                        data._mutable = True
+                    data['delivery_terms'] = None
             
             # Website field uchun bo'sh stringlarni None ga o'zgartirish
             if 'website' in data:
@@ -2535,7 +2616,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             _choice_display_to_key_list(data, 'magazine_cards', SupplierQuestionnaire.MAGAZINE_CARD_CHOICES)
             _choice_display_to_key_list(data, 'categories', SupplierQuestionnaire.CATEGORY_CHOICES)
             _choice_display_to_key_single(data, 'business_form', SupplierQuestionnaire.BUSINESS_FORM_CHOICES)
-            _choice_display_to_key_single(data, 'speed_of_execution', SupplierQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
+            _choice_display_to_key_list(data, 'speed_of_execution', SupplierQuestionnaire.SPEED_OF_EXECUTION_CHOICES)
             _choice_display_to_key_single(data, 'vat_payment', SupplierQuestionnaire.VAT_PAYMENT_CHOICES)
             _choice_display_to_key_single(data, 'status', SupplierQuestionnaire.STATUS_CHOICES)
             _choice_display_to_key_single(data, 'group', QUESTIONNAIRE_GROUP_CHOICES)
@@ -2572,6 +2653,22 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         if not isinstance(value, list):
             return []
         return value
+
+    def validate_speed_of_execution(self, value):
+        """Проверка speed_of_execution - list of valid keys"""
+        if not isinstance(value, list):
+            return []
+        valid = [c[0] for c in SupplierQuestionnaire.SPEED_OF_EXECUTION_CHOICES]
+        for v in value:
+            if v not in valid:
+                raise serializers.ValidationError(f"Неверная скорость исполнения: {v}")
+        return value
+
+    def validate_delivery_terms(self, value):
+        """Проверка delivery_terms - string"""
+        if value is None:
+            return None
+        return str(value).strip() or None
 
 
 class MediaQuestionnaireSerializer(serializers.ModelSerializer):

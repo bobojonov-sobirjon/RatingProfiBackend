@@ -548,13 +548,10 @@ class DesignerQuestionnaire(models.Model):
         verbose_name='Назначение недвижимости'
     )
     
-    # Площадь объекта (м²)
-    # Площадь объекта — текстовие варианты (до 10 м2, до 40 м 2, до 80 м 2, дома)
-    area_of_object = models.CharField(
-        max_length=50,
+    # Площадь объекта (JSONField: list, до 10 м2, до 40 м 2, до 80 м 2, дома)
+    area_of_object = models.JSONField(
+        default=list,
         blank=True,
-        null=True,
-        choices=AREA_OF_OBJECT_CHOICES,
         verbose_name='Площадь объекта'
     )
     
@@ -831,12 +828,10 @@ class RepairQuestionnaire(models.Model):
         verbose_name='Категории'
     )
     
-    # Скорость исполнения
-    speed_of_execution = models.CharField(
-        max_length=30,
-        choices=SPEED_OF_EXECUTION_CHOICES,
+    # Скорость исполнения (JSONField: list of keys from SPEED_OF_EXECUTION_CHOICES)
+    speed_of_execution = models.JSONField(
+        default=list,
         blank=True,
-        null=True,
         verbose_name='Скорость исполнения'
     )
     
@@ -1059,7 +1054,7 @@ class SupplierQuestionnaire(models.Model):
         verbose_name='Другое (Boshqa) - дополнительные контакты'
     )
     
-    # Сроки поставки и формат работы
+    # Сроки поставки и формат работы (TextField - string)
     delivery_terms = models.TextField(
         blank=True,
         null=True,
@@ -1141,12 +1136,10 @@ class SupplierQuestionnaire(models.Model):
         verbose_name='Декор'
     )
     
-    # Скорость исполнения / сроки поставки
-    speed_of_execution = models.CharField(
-        max_length=30,
-        choices=SPEED_OF_EXECUTION_CHOICES,
+    # Скорость исполнения / сроки поставки (JSONField: list of keys from SPEED_OF_EXECUTION_CHOICES)
+    speed_of_execution = models.JSONField(
+        default=list,
         blank=True,
-        null=True,
         verbose_name='Скорость исполнения'
     )
     
