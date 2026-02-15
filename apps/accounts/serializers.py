@@ -2564,6 +2564,9 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                 return [str(v).strip()] if str(v).strip() else []
 
             for field in list_fields:
+                # PUT: faqat request da yuborilgan fieldlarni yangilaymiz (yangi list eski o'rniga)
+                if field not in data:
+                    continue
                 if hasattr(data, 'getlist'):
                     raw = data.getlist(field)
                 else:
@@ -2571,7 +2574,8 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                 if hasattr(data, '_mutable') and not data._mutable:
                     data._mutable = True
                 parsed_list = _any_to_list(raw) if raw is not None and raw != '' else []
-                data[field] = _json.dumps(parsed_list, ensure_ascii=False)
+                # JSONField uchun Python list (yangi list eski o'rniga qo'yiladi)
+                data[field] = parsed_list
 
             # delivery_terms: string (TextField)
             if 'delivery_terms' in data:

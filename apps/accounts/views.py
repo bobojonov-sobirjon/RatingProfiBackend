@@ -3413,6 +3413,7 @@ class RepairQuestionnaireStatusUpdateView(views.APIView):
     
     Массивы (representative_cities, other_contacts, rough_materials, finishing_materials, upholstered_furniture, cabinet_furniture, technique, decor):
     - В Swagger выберите body type "application/json" и отправляйте массивы как JSON: "rough_materials": ["электрика", "су"].
+    - PUT: yangi list yuborilsa eski o'rniga yangi. Frontend yangi datani yuboradi, eski o'chiriladi.
     - При form-data можно: один раз ключ с JSON-строкой "[\"электрика\",\"су\"]" или через запятую "электрика,су".
     
     GET и PUT принимают/возвращают те же поля.
