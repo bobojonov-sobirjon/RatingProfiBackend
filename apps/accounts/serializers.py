@@ -2336,10 +2336,10 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         help_text="Города представительств. Массив строк. Form-data: bir nechta key bilan yoki JSON."
     )
     other_contacts = serializers.ListField(
-        child=serializers.DictField(required=False, allow_null=True),
+        child=serializers.JSONField(required=False, allow_null=True),
         required=False,
         allow_empty=True,
-        help_text="Дополнительные контакты. Массив объектов: [{\"type\":\"telegram\",\"value\":\"...\"}]. Form-data: bir nechta key bilan."
+        help_text="Дополнительные контакты. [{\"type\":\"telegram\",\"value\":\"...\"}] yoki oddiy stringlar."
     )
     delivery_terms = serializers.CharField(
         required=False,
@@ -2352,6 +2352,37 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         required=False,
         allow_empty=True,
         help_text="Скорость исполнения (multiple). Yuboriladi: В наличии, До 2х недель, До 1 месяца, До 3х месяцев, Не важно. PUT: yangi list yuborilsa eski o'rniga yangi."
+    )
+    rough_materials = serializers.ListField(
+        child=serializers.CharField(required=False, allow_blank=True),
+        required=False,
+        allow_empty=True,
+        help_text="Черновые материалы. Masalan: электрика, су, пол."
+    )
+    finishing_materials = serializers.ListField(
+        child=serializers.CharField(required=False, allow_blank=True),
+        required=False,
+        allow_empty=True,
+    )
+    upholstered_furniture = serializers.ListField(
+        child=serializers.CharField(required=False, allow_blank=True),
+        required=False,
+        allow_empty=True,
+    )
+    cabinet_furniture = serializers.ListField(
+        child=serializers.CharField(required=False, allow_blank=True),
+        required=False,
+        allow_empty=True,
+    )
+    technique = serializers.ListField(
+        child=serializers.CharField(required=False, allow_blank=True),
+        required=False,
+        allow_empty=True,
+    )
+    decor = serializers.ListField(
+        child=serializers.CharField(required=False, allow_blank=True),
+        required=False,
+        allow_empty=True,
     )
     
     def to_representation(self, instance):
@@ -2547,15 +2578,20 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
             ]
             # representative_cities, other_contacts — doim parse qilamiz (POST create uchun)
             # rough_materials va boshqalari — faqat PUT da yuborilganda
-            list_fields_always = ['representative_cities', 'other_contacts']
+            list_fields_always = [
+                'representative_cities', 'other_contacts',
+                'rough_materials', 'finishing_materials', 'upholstered_furniture',
+                'cabinet_furniture', 'technique', 'decor',
+            ]
 
-            def _any_to_list(v, parse_json_objects=False):
+            def _any_to_list(v, parse_json_objects=False, split_comma=True):
+                """parse_json_objects: other_contacts uchun {"type":"x","value":"y"} -> dict. split_comma: False = representative_cities uchun vergulga bo'lmasin."""
                 if v is None or v == '': return []
                 if isinstance(v, list):
                     out = []
                     for x in v:
                         if isinstance(x, (list, tuple)):
-                            out.extend(_any_to_list(x, parse_json_objects))
+                            out.extend(_any_to_list(x, parse_json_objects, split_comma))
                         elif x is not None and str(x).strip():
                             s = str(x).strip()
                             if parse_json_objects:
@@ -2572,7 +2608,7 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                         keys = sorted(v.keys(), key=lambda k: int(k) if str(k).isdigit() else k)
                         out = []
                         for k in keys:
-                            out.extend(_any_to_list(v[k], parse_json_objects))
+                            out.extend(_any_to_list(v[k], parse_json_objects, split_comma))
                         return out
                     except (TypeError, ValueError):
                         return [str(x).strip() for x in v.values() if x is not None and str(x).strip()]
@@ -2581,14 +2617,17 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
                     if not s: return []
                     try:
                         p = _json.loads(s)
-                        return _any_to_list(p, parse_json_objects)
+                        return _any_to_list(p, parse_json_objects, split_comma)
                     except (_json.JSONDecodeError, ValueError):
-                        return [x.strip() for x in s.split(',') if x.strip()]
+                        if split_comma:
+                            return [x.strip() for x in s.split(',') if x.strip()]
+                        return [s]
                 return [str(v).strip()] if str(v).strip() else []
 
             def _parse_list_field(field, raw):
                 use_json_objects = (field == 'other_contacts')
-                return _any_to_list(raw, parse_json_objects=use_json_objects) if raw is not None and raw != '' else []
+                split_comma = (field != 'representative_cities')  # manzilda vergul bo'lishi mumkin
+                return _any_to_list(raw, parse_json_objects=use_json_objects, split_comma=split_comma) if raw is not None and raw != '' else []
 
             for field in list_fields:
                 # rough_materials, etc: PUT da faqat yuborilganda. representative_cities, other_contacts: doim
