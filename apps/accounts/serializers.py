@@ -1003,17 +1003,17 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         # Социальные сети
         social_networks = {}
         if obj.vk:
-            social_networks['ВК'] = obj.vk
+            social_networks['vk'] = obj.vk
         if obj.telegram_channel:
-            social_networks['Телеграм канал'] = obj.telegram_channel
+            social_networks['telegram_channel'] = obj.telegram_channel
         if obj.pinterest:
-            social_networks['Пинтерест'] = obj.pinterest
+            social_networks['pinterest'] = obj.pinterest
         if obj.instagram:
-            social_networks['Инстаграм'] = obj.instagram
+            social_networks['instagram'] = obj.instagram
         if obj.website:
-            social_networks['Веб-сайт'] = obj.website
+            social_networks['website'] = obj.website
         if obj.other_contacts:
-            social_networks['Другое'] = obj.other_contacts
+            social_networks['other_contacts'] = obj.other_contacts
         
         if social_networks:
             about_company_data.append({
@@ -1626,17 +1626,17 @@ class RepairQuestionnaireSerializer(serializers.ModelSerializer):
         # Социальные сети
         social_networks = {}
         if obj.vk:
-            social_networks['ВК'] = obj.vk
+            social_networks['vk'] = obj.vk
         if obj.telegram_channel:
-            social_networks['Телеграм канал'] = obj.telegram_channel
+            social_networks['telegram_channel'] = obj.telegram_channel
         if obj.pinterest:
-            social_networks['Пинтерест'] = obj.pinterest
+            social_networks['pinterest'] = obj.pinterest
         if obj.instagram:
-            social_networks['Инстаграм'] = obj.instagram
+            social_networks['instagram'] = obj.instagram
         if obj.website:
-            social_networks['Веб-сайт'] = obj.website
+            social_networks['website'] = obj.website
         if obj.other_contacts:
-            social_networks['Другое'] = obj.other_contacts
+            social_networks['other_contacts'] = obj.other_contacts
         
         if social_networks:
             about_company_data.append({
@@ -2238,17 +2238,17 @@ class SupplierQuestionnaireSerializer(serializers.ModelSerializer):
         # Социальные сети
         social_networks = {}
         if obj.vk:
-            social_networks['ВК'] = obj.vk
+            social_networks['vk'] = obj.vk
         if obj.telegram_channel:
-            social_networks['Телеграм канал'] = obj.telegram_channel
+            social_networks['telegram_channel'] = obj.telegram_channel
         if obj.pinterest:
-            social_networks['Пинтерест'] = obj.pinterest
+            social_networks['pinterest'] = obj.pinterest
         if obj.instagram:
-            social_networks['Инстаграм'] = obj.instagram
+            social_networks['instagram'] = obj.instagram
         if obj.website:
-            social_networks['Веб-сайт'] = obj.website
+            social_networks['website'] = obj.website
         if obj.other_contacts:
-            social_networks['Другое'] = obj.other_contacts
+            social_networks['other_contacts'] = obj.other_contacts
         
         if social_networks:
             about_company_data.append({
