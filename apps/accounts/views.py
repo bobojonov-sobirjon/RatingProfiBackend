@@ -36,6 +36,7 @@ from .serializers import (
     MediaQuestionnaireSerializer,
     QuestionnaireStatusUpdateSerializer,
     GroupSerializer,
+    ReportUpdateSerializer,
 )
 from .models import (
     SMSVerificationCode,
@@ -5251,3 +5252,96 @@ class MediaQuestionnaireModerationView(views.APIView):
         
         result_serializer = MediaQuestionnaireSerializer(questionnaire, context={'request': request})
         return Response(result_serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Reports'],
+    summary='Обновить или создать Report для пользователя',
+    description="""
+    POST запрос для обновления или создания Report для пользователя.
+    
+    Request body:
+    - date: Дата начала подписки (start_date)
+    - user_id: ID пользователя
+    
+    Логика:
+    - Если Report для пользователя существует - обновляется
+    - Если не существует - создается новый
+    - start_date = дата из request body
+    - end_date = start_date + 1 год (если роль пользователя 'designer'), иначе start_date + 3 месяца
+    """,
+    request=ReportUpdateSerializer,
+    responses={
+        200: {
+            'description': 'Report успешно обновлен/создан',
+            'content': {
+                'application/json': {
+                    'example': {
+                        'id': 1,
+                        'user': 1,
+                        'start_date': '2025-01-23',
+                        'end_date': '2026-01-23',
+                        'message': 'Report успешно обновлен'
+                    }
+                }
+            }
+        },
+        400: {'description': 'Неверные данные'},
+        404: {'description': 'Пользователь не найден'},
+    }
+)
+class ReportUpdateView(views.APIView):
+    """
+    Обновление или создание Report для пользователя
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        serializer = ReportUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        date_value = serializer.validated_data['date']
+        user_id = serializer.validated_data['user_id']
+        
+        # Получаем пользователя
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'Пользователь не найден'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Вычисляем end_date в зависимости от роли
+        if user.role == 'designer':
+            # Дизайнеры имеют доступ 1 год
+            end_date = date_value + timedelta(days=365)
+        else:
+            # Остальные 3 месяца
+            end_date = date_value + timedelta(days=90)
+        
+        # Ищем существующий Report или создаем новый
+        report, created = Report.objects.get_or_create(
+            user=user,
+            defaults={
+                'start_date': date_value,
+                'end_date': end_date
+            }
+        )
+        
+        # Если Report уже существует, обновляем его
+        if not created:
+            report.start_date = date_value
+            report.end_date = end_date
+            report.save()
+        
+        return Response({
+            'id': report.id,
+            'user': report.user.id,
+            'user_phone': report.user.phone,
+            'user_role': report.user.role,
+            'start_date': report.start_date,
+            'end_date': report.end_date,
+            'message': 'Report успешно создан' if created else 'Report успешно обновлен'
+        }, status=status.HTTP_200_OK)

@@ -19,6 +19,7 @@ from .models import (
     RepairQuestionnaire,
     SupplierQuestionnaire,
     MediaQuestionnaire,
+    Report,
     QUESTIONNAIRE_GROUP_CHOICES,
 )
 from .utils import send_sms_via_smsaero, generate_sms_code
@@ -3181,6 +3182,18 @@ class GroupSerializer(serializers.Serializer):
     is_locked = serializers.BooleanField(
         read_only=True,
         help_text="True, если пользователь состоит в этой группе"
+    )
+
+
+class ReportUpdateSerializer(serializers.Serializer):
+    """Serializer для обновления Report"""
+    date = serializers.DateField(
+        required=True,
+        help_text="Дата начала подписки (start_date)"
+    )
+    user_id = serializers.IntegerField(
+        required=True,
+        help_text="ID пользователя"
     )
 
 

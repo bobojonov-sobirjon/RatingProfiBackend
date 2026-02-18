@@ -48,6 +48,7 @@ from .views import (
     MediaQuestionnaireRestoreView,
     MediaQuestionnaireDeleteView,
     UserRolesView,
+    ReportUpdateView,
 )
 
 urlpatterns = [
@@ -106,4 +107,7 @@ urlpatterns = [
     path('media-questionnaires/<int:pk>/archive/', MediaQuestionnaireArchiveView.as_view(), name='media-questionnaire-archive'),
     path('media-questionnaires/<int:pk>/restore/', MediaQuestionnaireRestoreView.as_view(), name='media-questionnaire-restore'),
     path('media-questionnaires/<int:pk>/delete/', MediaQuestionnaireDeleteView.as_view(), name='media-questionnaire-delete'),
+    
+    # Reports
+    path('reports/update/', ReportUpdateView.as_view(), name='report-update'),
 ] 
