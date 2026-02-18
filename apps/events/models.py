@@ -45,7 +45,7 @@ class UpcomingEvent(models.Model):
     
     # Анонс мероприятия
     announcement = models.TextField(
-        verbose_name='Анонс мероприятия'
+        verbose_name='Анонс мероприятия', null=True, blank=True
     )
     
     # Дата, время и место проведения мероприятия
