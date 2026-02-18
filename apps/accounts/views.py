@@ -4904,7 +4904,7 @@ class DesignerQuestionnaireModerationView(views.APIView):
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
         # Для Дизайн - 3 месяца
-        end_date = start_date + timedelta(days=90)
+        end_date = start_date + timedelta(days=365)
         
         # Проверяем, есть ли уже активный Report для этого пользователя
         existing_report = Report.objects.filter(
@@ -5013,7 +5013,7 @@ class RepairQuestionnaireModerationView(views.APIView):
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
         # Для Ремонт - 1 год
-        end_date = start_date + timedelta(days=365)
+        end_date = start_date + timedelta(days=90)
         
         # Проверяем, есть ли уже активный Report для этого пользователя
         existing_report = Report.objects.filter(
@@ -5122,7 +5122,7 @@ class SupplierQuestionnaireModerationView(views.APIView):
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
         # Для Поставщик - 1 год
-        end_date = start_date + timedelta(days=365)
+        end_date = start_date + timedelta(days=90)
         
         # Проверяем, есть ли уже активный Report для этого пользователя
         existing_report = Report.objects.filter(
@@ -5231,7 +5231,7 @@ class MediaQuestionnaireModerationView(views.APIView):
         # Создание Report (если еще не существует для этого пользователя)
         start_date = date.today()
         # Для Медиа - 1 год
-        end_date = start_date + timedelta(days=365)
+        end_date = start_date + timedelta(days=90)
         
         # Проверяем, есть ли уже активный Report для этого пользователя
         existing_report = Report.objects.filter(
