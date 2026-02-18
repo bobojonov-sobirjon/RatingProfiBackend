@@ -5321,20 +5321,23 @@ class ReportUpdateView(views.APIView):
             # Остальные 3 месяца
             end_date = date_value + timedelta(days=90)
         
-        # Ищем существующий Report или создаем новый
-        report, created = Report.objects.get_or_create(
-            user=user,
-            defaults={
-                'start_date': date_value,
-                'end_date': end_date
-            }
-        )
+        # Bir user uchun bir nechta Report bo'lishi mumkin - eng so'nggisini olamiz
+        report = Report.objects.filter(user=user).order_by('-created_at').first()
         
-        # Если Report уже существует, обновляем его
-        if not created:
+        if report:
+            # Mavjud Report ni yangilaymiz
             report.start_date = date_value
             report.end_date = end_date
             report.save()
+            created = False
+        else:
+            # Yangi Report yaratamiz
+            report = Report.objects.create(
+                user=user,
+                start_date=date_value,
+                end_date=end_date
+            )
+            created = True
         
         return Response({
             'id': report.id,
