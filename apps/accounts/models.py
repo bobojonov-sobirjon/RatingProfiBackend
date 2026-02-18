@@ -318,7 +318,7 @@ class DesignerQuestionnaire(models.Model):
         ('author_supervision', 'Авторский надзор'),
         ('architecture', 'Архитектура'),
         ('decorator', 'Декоратор'),
-        ('designer_horika', 'Дизайнер HoReCa'),
+        ('designer_horika', 'Направление HoReCa'),
         ('residential_designer', 'Дизайнер жилой недвижимости'),
         ('commercial_designer', 'Дизайнер коммерческой недвижимости'),
         ('completing', 'Комплектация'),

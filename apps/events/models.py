@@ -32,7 +32,7 @@ class UpcomingEvent(models.Model):
     
     # Название организации
     organization_name = models.CharField(
-        max_length=255,
+        max_length=30,
         verbose_name='Название организации'
     )
     
