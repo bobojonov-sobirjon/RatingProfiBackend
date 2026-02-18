@@ -6,10 +6,15 @@ from django.db import migrations, models
 def truncate_organization_names(apps, schema_editor):
     """Truncate organization_name to 30 characters before altering field"""
     UpcomingEvent = apps.get_model('events', 'UpcomingEvent')
+    events_to_update = []
     for event in UpcomingEvent.objects.all():
-        if len(event.organization_name) > 30:
+        if event.organization_name and len(event.organization_name) > 30:
             event.organization_name = event.organization_name[:30]
-            event.save(update_fields=['organization_name'])
+            events_to_update.append(event)
+    
+    # Bulk update for better performance
+    if events_to_update:
+        UpcomingEvent.objects.bulk_update(events_to_update, ['organization_name'])
 
 
 def reverse_truncate_organization_names(apps, schema_editor):
