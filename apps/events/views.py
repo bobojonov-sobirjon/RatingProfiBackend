@@ -1061,10 +1061,12 @@ class ReportsAnalyticsView(views.APIView):
     GET: Получить список всех отчетов (Report model)
     
     Возвращает список всех отчетов с информацией:
+    - id: ID отчета
     - name: Название организации ФИ (full_name пользователя)
     - group: Группа (role display: Дизайнер, Ремонт, Поставщик, Медиа)
     - start_date: Дата начала периода (формат: DD.MM.YYYY)
     - next_payment_date: Следующая оплата / Дата окончания периода (формат: DD.MM.YYYY)
+    - is_active: True, если текущая дата в пределах start_date и end_date
     
     Фильтры:
     - user_id: Фильтр по ID пользователя
@@ -1226,11 +1228,17 @@ class AllReportsView(views.APIView):
             # Full name olish. "без имени" bo'lsa anketadagi brand_name ishlatiladi
             name = UserPublicSerializer(report.user).data.get('company_name') or report.user.phone or 'Не указано'
             
+            # is_active: hozirgi sana start_date va end_date orasida bo'lsa True
+            today = timezone.now().date()
+            is_active = report.start_date <= today <= report.end_date
+            
             results.append({
+                'id': report.id,
                 'name': name,
                 'group': group,
                 'start_date': report.start_date.strftime('%d.%m.%Y'),
                 'next_payment_date': report.end_date.strftime('%d.%m.%Y'),
+                'is_active': is_active,
             })
         
         return paginator.get_paginated_response(results)
