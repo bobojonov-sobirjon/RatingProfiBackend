@@ -1062,6 +1062,7 @@ class ReportsAnalyticsView(views.APIView):
     
     Возвращает список всех отчетов с информацией:
     - id: ID отчета
+    - user_id: ID пользователя
     - name: Название организации ФИ (full_name пользователя)
     - group: Группа (role display: Дизайнер, Ремонт, Поставщик, Медиа)
     - start_date: Дата начала периода (формат: DD.MM.YYYY)
@@ -1234,6 +1235,7 @@ class AllReportsView(views.APIView):
             
             results.append({
                 'id': report.id,
+                'user_id': report.user.id,
                 'name': name,
                 'group': group,
                 'start_date': report.start_date.strftime('%d.%m.%Y'),
