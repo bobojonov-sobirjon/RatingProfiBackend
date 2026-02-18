@@ -52,7 +52,7 @@ def send_sms_via_smsaero(phone_number: str, code: str) -> dict:
     
     # SMS Aero shablonidan foydalanish
     # Shablon nomi: "Код авторизации Rating Profi"
-    message = f"Ваш код для входа в Rating Profi: {code}. Код действителен 5 минут."
+    message = f"Ваш код для входа в Рейтинг Профи: {code}. Код действителен 5 минут."
     
     # SMS Aero API v2 formatida sign (imzo) kabinetda tasdiqlangan bo'lishi kerak
     # Sign kabinetda sozlanadi: https://smsaero.ru/cabinet/settings/sign/
