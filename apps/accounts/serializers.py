@@ -719,20 +719,24 @@ class UserPublicSerializer(serializers.ModelSerializer):
         """Faqat raqamlar — anketada telefon turli formatda bo'lishi mumkin."""
         return ''.join(c for c in (s or '') if c.isdigit())
 
-    def _find_questionnaire_for_user(self, obj, phone_digits, email_lower):
+    def _get_questionnaire_data_for_user(self, obj):
         """
-        User guruhiga qarab BITTА anketani topadi.
-        Дизайн → DesignerQuestionnaire (full_name);
-        Ремонт/Поставщик/Медиа → o'sha model (brand_name).
-        Qidirish: telefon faqat raqamda yoki email.
+        User guruhiga qarab mos anketani topadi va {'brand_name', 'full_name'} qaytaradi.
+        Дизайн → full_name (brand_name yo'q); Ремонт/Поставщик/Медиа → brand_name va full_name.
+        Qidirish: telefon yoki email orqali.
         """
         group_to_model = [
-            ('Дизайн', DesignerQuestionnaire, 'full_name'),
-            ('Ремонт', RepairQuestionnaire, 'brand_name'),
-            ('Поставщик', SupplierQuestionnaire, 'brand_name'),
-            ('Медиа', MediaQuestionnaire, 'brand_name'),
+            ('Дизайн', DesignerQuestionnaire),
+            ('Ремонт', RepairQuestionnaire),
+            ('Поставщик', SupplierQuestionnaire),
+            ('Медиа', MediaQuestionnaire),
         ]
         group_names = list(obj.groups.values_list('name', flat=True))
+        phone = (getattr(obj, 'phone', None) or '').strip()
+        email = (getattr(obj, 'email', None) or '').strip().lower() or None
+        phone_digits = self._norm_phone(phone) if phone else None
+        if not phone_digits and not email:
+            return None
 
         def match_questionnaire(q):
             if phone_digits and self._norm_phone(getattr(q, 'phone', None)) == phone_digits:
@@ -742,11 +746,6 @@ class UserPublicSerializer(serializers.ModelSerializer):
                     return True
             return False
 
-        def get_value(q, attr):
-            if attr == 'full_name':
-                return (getattr(q, 'full_name') or getattr(q, 'full_name_en', None) or '').strip()
-            return (getattr(q, attr, None) or '').strip()
-
         def query_model(model):
             qs = model.objects.filter(is_deleted=False)
             if email_lower:
@@ -755,55 +754,62 @@ class UserPublicSerializer(serializers.ModelSerializer):
                 qs = qs.filter(Q(phone__icontains=phone_digits[-9:]) | Q(phone=phone_digits) | Q(phone__icontains=phone_digits))
             return qs
 
-        # Avval user guruhiga mos anketani qidirish (faqat shu guruh)
-        for group_name, model, attr in group_to_model:
+        email_lower = email
+
+        def extract_data(q, model):
+            full_name = (getattr(q, 'full_name', None) or getattr(q, 'full_name_en', None) or '').strip()
+            brand_name = (getattr(q, 'brand_name', None) or '').strip() if hasattr(q, 'brand_name') else ''
+            return {'brand_name': brand_name or None, 'full_name': full_name or None}
+
+        # Avval user guruhiga mos anketani qidirish
+        for group_name, model in group_to_model:
             if group_name not in group_names:
                 continue
             for q in query_model(model):
                 if match_questionnaire(q):
-                    val = get_value(q, attr)
-                    if val:
-                        return val
-                    # Repair/Supplier/Media da full_name frontend dan kelmaydi — doim brand_name
-                    if attr == 'brand_name':
-                        return val or None
+                    return extract_data(q, model)
 
         # Topilmasa barcha anketalarda qidirish (fallback)
-        for _gr, model, attr in group_to_model:
+        for _gr, model in group_to_model:
             for q in query_model(model):
                 if match_questionnaire(q):
-                    val = get_value(q, attr)
-                    if val:
-                        return val
-                    if attr == 'brand_name':
-                        return val or None
+                    return extract_data(q, model)
         return None
 
     def _get_display_name_from_user_or_questionnaire(self, obj):
-        """User yoki anketadan display name olish. 'без имени' bo'sh hisoblanadi."""
+        """User yoki anketadan display name olish (fallback). 'без имени' bo'sh hisoblanadi."""
         if obj.company_name and not _is_empty_name(obj.company_name):
             return obj.company_name
         if obj.full_name and not _is_empty_name(obj.full_name):
             return obj.full_name
-        phone = (getattr(obj, 'phone', None) or '').strip()
-        email = (getattr(obj, 'email', None) or '').strip().lower() or None
-        phone_digits = self._norm_phone(phone) if phone else None
-        if not phone_digits and not email:
-            return None
-        return self._find_questionnaire_for_user(obj, phone_digits, email)
+        q_data = self._get_questionnaire_data_for_user(obj)
+        if q_data:
+            return q_data.get('brand_name') or q_data.get('full_name')
+        return None
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_company_name(self, obj):
         """
-        company_name: profil → full_name → user guruhiga tegishli anketa.
-        Дизайн → full_name; Ремонт/Поставщик/Медиа → doim brand_name.
-        "без имени" — bo'sh deb hisoblanadi, anketadagi brand_name qo'yiladi.
+        company_name: faqat user guruhiga tegishli anketadagi brand_name (Дизайн uchun full_name).
+        Profil company_name / full_name ishlatilmaydi — doim anketa ma'lumotidan.
         """
-        return self._get_display_name_from_user_or_questionnaire(obj)
+        q_data = self._get_questionnaire_data_for_user(obj)
+        if not q_data:
+            return None
+        # Ремонт/Поставщик/Медиа → brand_name; Дизайн → full_name (chunki brand_name yo'q)
+        return q_data.get('brand_name') or q_data.get('full_name')
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_full_name(self, obj):
-        """full_name: agar 'без имени' bo'lsa anketadagi brand_name qo'yiladi."""
+        """
+        full_name: faqat Медиа rolidagi user uchun anketadagi full_name.
+        Boshqa guruhlar uchun user profilidagi full_name (yoki fallback).
+        """
+        group_names = list(obj.groups.values_list('name', flat=True))
+        if 'Медиа' in group_names:
+            q_data = self._get_questionnaire_data_for_user(obj)
+            if q_data and q_data.get('full_name'):
+                return q_data['full_name']
         if obj.full_name and not _is_empty_name(obj.full_name):
             return obj.full_name
         return self._get_display_name_from_user_or_questionnaire(obj)
@@ -1384,24 +1390,16 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
                         data._mutable = True
                     data['website'] = None
             
-            # File fields (photo, company_logo, legal_entity_card) uchun bo'sh stringlarni None ga o'zgartirish
-            # Faqat string bo'lsa tekshiramiz, file obyektlarni o'zgartirmaymiz
             file_fields = ['photo', 'company_logo', 'legal_entity_card']
             for field in file_fields:
                 if field in data:
                     file_value = data.get(field)
-                    # Faqat string bo'lsa tekshiramiz (file obyektlarni o'zgartirmaymiz)
-                    # File obyektlarni tekshirish uchun isinstance yoki hasattr ishlatamiz
                     if isinstance(file_value, str):
-                        # Agar bo'sh string yoki 'null' string bo'lsa, None ga o'zgartirish
                         if not file_value.strip() or file_value.strip().lower() == 'null':
                             if hasattr(data, '_mutable') and not data._mutable:
                                 data._mutable = True
                             data[field] = None
-                    # Agar file obyekt bo'lsa (InMemoryUploadedFile, TemporaryUploadedFile), hech narsa qilmaymiz
-                    # File obyektlarni o'zgartirmaymiz, chunki DRF ularni to'g'ri handle qiladi
                     elif isinstance(file_value, (InMemoryUploadedFile, TemporaryUploadedFile)):
-                        # File obyektni o'zgartirmaymiz, to'g'ridan-to'g'ri o'tkazib yuboramiz
                         pass
             
             # PUT: frontend display name yuboradi, key ga aylantirish
