@@ -796,6 +796,8 @@ class UserPublicSerializer(serializers.ModelSerializer):
         q_data = self._get_questionnaire_data_for_user(obj)
         if not q_data:
             return None
+        
+        print()
         # Ремонт/Поставщик/Медиа → brand_name; Дизайн → full_name (chunki brand_name yo'q)
         return q_data.get('brand_name') or q_data.get('full_name')
 
