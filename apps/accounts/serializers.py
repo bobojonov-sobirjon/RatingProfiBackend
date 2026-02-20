@@ -1212,6 +1212,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
             'pinterest',
             'instagram',
             'website',
+            'welcome_message',
             'work_cities',
             'other_contacts',
             'service_packages_description',
