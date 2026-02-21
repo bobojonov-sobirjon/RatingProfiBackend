@@ -56,6 +56,7 @@ class QuestionnaireRatingSerializer(serializers.ModelSerializer):
     @extend_schema_field(str)
     def get_reviewer_company_name(self, obj):
         user = UserPublicSerializer(obj.reviewer)
+        return user.data.get('company_name')
         
     
     @extend_schema_field(dict)
