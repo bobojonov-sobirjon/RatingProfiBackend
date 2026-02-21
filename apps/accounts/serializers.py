@@ -719,11 +719,29 @@ class UserPublicSerializer(serializers.ModelSerializer):
         """Faqat raqamlar — anketada telefon turli formatda bo'lishi mumkin."""
         return ''.join(c for c in (s or '') if c.isdigit())
 
+    def _phone_match(self, user_digits, q_phone):
+        """Telefon mosligi: to'liq, oxirgi 10 raqam, yoki biri ikkinchisining qismi (8900039917 ≈ 89000399172)."""
+        if not user_digits:
+            return False
+        q_digits = self._norm_phone(q_phone)
+        if not q_digits:
+            return False
+        if user_digits == q_digits:
+            return True
+        # RU: 89001234567 = 79001234567 — oxirgi 10 raqam
+        if len(user_digits) >= 10 and len(q_digits) >= 10:
+            if user_digits[-10:] == q_digits[-10:]:
+                return True
+        # Biri ikkinchisining bosh qismi (8900039917 va 89000399172)
+        if len(user_digits) >= 9 and len(q_digits) >= 9:
+            if user_digits in q_digits or q_digits in user_digits:
+                return True
+        return False
+
     def _get_questionnaire_data_for_user(self, obj):
         """
-        User guruhiga qarab mos anketani topadi va {'brand_name', 'full_name'} qaytaradi.
-        Дизайн → full_name (brand_name yo'q); Ремонт/Поставщик/Медиа → brand_name va full_name.
-        Qidirish: telefon yoki email orqali.
+        User guruhiga qarab mos anketani topadi va {'brand_name', 'full_name', 'group'} qaytaradi.
+        Qidirish: telefon yoki email orqali (OR — birorta mos kelsa yetarli).
         """
         group_to_model = [
             ('Дизайн', DesignerQuestionnaire),
@@ -738,8 +756,10 @@ class UserPublicSerializer(serializers.ModelSerializer):
         if not phone_digits and not email:
             return None
 
+        email_lower = email
+
         def match_questionnaire(q):
-            if phone_digits and self._norm_phone(getattr(q, 'phone', None)) == phone_digits:
+            if phone_digits and self._phone_match(phone_digits, getattr(q, 'phone', None)):
                 return True
             if email_lower and getattr(q, 'email', None):
                 if (q.email or '').strip().lower() == email_lower:
@@ -748,18 +768,27 @@ class UserPublicSerializer(serializers.ModelSerializer):
 
         def query_model(model):
             qs = model.objects.filter(is_deleted=False)
+            filters = Q()
             if email_lower:
-                qs = qs.filter(Q(email__iexact=email_lower))
+                filters |= Q(email__iexact=email_lower)
             if phone_digits and len(phone_digits) >= 9:
-                qs = qs.filter(Q(phone__icontains=phone_digits[-9:]) | Q(phone=phone_digits) | Q(phone__icontains=phone_digits))
+                tail = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits[-9:]
+                filters |= Q(phone__icontains=tail) | Q(phone__icontains=phone_digits)
+                # Qisqa raqam ham qidirish (8900039917 → 900039917)
+                if len(phone_digits) >= 10:
+                    filters |= Q(phone__icontains=phone_digits[-9:])
+            if filters:
+                qs = qs.filter(filters)
             return qs
 
-        email_lower = email
-
-        def extract_data(q, model):
+        def extract_data(q, group_name):
             full_name = (getattr(q, 'full_name', None) or getattr(q, 'full_name_en', None) or '').strip()
             brand_name = (getattr(q, 'brand_name', None) or '').strip() if hasattr(q, 'brand_name') else ''
-            return {'brand_name': brand_name or None, 'full_name': full_name or None}
+            return {
+                'brand_name': brand_name or None,
+                'full_name': full_name or None,
+                'group': group_name,
+            }
 
         # Avval user guruhiga mos anketani qidirish
         for group_name, model in group_to_model:

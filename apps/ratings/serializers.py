@@ -7,6 +7,7 @@ from apps.accounts.serializers import (
     SupplierQuestionnaireSerializer,
     MediaQuestionnaireSerializer,
 )
+from apps.accounts.serializers import UserPublicSerializer
 
 
 class QuestionnaireRatingCreateSerializer(serializers.Serializer):
@@ -37,6 +38,7 @@ class QuestionnaireRatingSerializer(serializers.ModelSerializer):
     """
     reviewer_name = serializers.SerializerMethodField()
     reviewer_phone = serializers.SerializerMethodField()
+    reviewer_company_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(
         source='get_status_display',
         read_only=True
@@ -50,6 +52,11 @@ class QuestionnaireRatingSerializer(serializers.ModelSerializer):
     @extend_schema_field(str)
     def get_reviewer_phone(self, obj):
         return obj.reviewer.phone
+    
+    @extend_schema_field(str)
+    def get_reviewer_company_name(self, obj):
+        user = UserPublicSerializer(obj.reviewer)
+        
     
     @extend_schema_field(dict)
     def get_questionnaire(self, obj):
@@ -87,8 +94,7 @@ class QuestionnaireRatingSerializer(serializers.ModelSerializer):
         model = QuestionnaireRating
         fields = [
             'id',
-            'reviewer',
-            'reviewer_name',
+            'reviewer'
             'reviewer_phone',
             'role',
             'questionnaire_id',
