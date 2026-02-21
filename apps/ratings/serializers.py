@@ -94,7 +94,7 @@ class QuestionnaireRatingSerializer(serializers.ModelSerializer):
         model = QuestionnaireRating
         fields = [
             'id',
-            'reviewer'
+            'reviewer',
             'reviewer_phone',
             'role',
             'questionnaire_id',
