@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
 from django.urls import reverse
-from django.utils.crypto import get_random_string
+from django.core import signing
 from datetime import date, timedelta
 import unicodedata
 from drf_spectacular.utils import extend_schema, OpenApiParameter
@@ -133,10 +133,6 @@ def _extract_russian_cities_from_value(value):
                 found.add(city)
         return found
     return set()
-
-
-# Password reset tokenlarni saqlash uchun dict (production'da cache yoki DB ishlatish kerak)
-PASSWORD_RESET_TOKENS = {}
 
 
 @extend_schema(
@@ -327,20 +323,18 @@ class ForgotPasswordView(views.APIView):
         if serializer.is_valid():
             email = serializer.validated_data['email']
             
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
+            # Bir xil email bilan bir nechta user bo'lishi mumkin,
+            # shuning uchun filter().first() ishlatamiz (get() o'rniga).
+            user_qs = User.objects.filter(email=email)
+            if not user_qs.exists():
                 # Xavfsizlik uchun har doim muvaffaqiyatli javob qaytaramiz
                 return Response({
                     'message': 'Если пользователь с таким email существует, ссылка для сброса пароля отправлена.'
                 }, status=status.HTTP_200_OK)
+            user = user_qs.order_by('id').first()
             
-            # Token yaratish
-            token = get_random_string(length=64)
-            PASSWORD_RESET_TOKENS[token] = {
-                'user_id': user.id,
-                'expires_at': timezone.now() + timedelta(hours=24)
-            }
+            # Token yaratish (imzolangan, 24 soat amal qiladi)
+            token = signing.dumps({'user_id': user.id}, salt='password-reset')
             
             # Email yuborish
             # Frontend URL ni olish (agar mavjud bo'lsa)
@@ -450,26 +444,28 @@ class ResetPasswordView(views.APIView):
             token = serializer.validated_data['token']
             new_password = serializer.validated_data['new_password']
             
-            # Token tekshirish
-            if token not in PASSWORD_RESET_TOKENS:
+            # Token tekshirish va ochish (24 soatlik amal qilish muddati)
+            try:
+                data = signing.loads(token, salt='password-reset', max_age=24 * 3600)
+            except signing.SignatureExpired:
+                return Response({
+                    'error': 'Токен истек. Запросите новый.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            except signing.BadSignature:
                 return Response({
                     'error': 'Неверный или истекший токен'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            token_data = PASSWORD_RESET_TOKENS[token]
-            
-            # Token muddati tekshirish
-            if timezone.now() > token_data['expires_at']:
-                del PASSWORD_RESET_TOKENS[token]
+            user_id = data.get('user_id')
+            if not user_id:
                 return Response({
-                    'error': 'Токен истек. Запросите новый.'
+                    'error': 'Неверный или истекший токен'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             # User topish va parolni o'zgartirish
             try:
-                user = User.objects.get(id=token_data['user_id'])
+                user = User.objects.get(id=user_id)
             except User.DoesNotExist:
-                del PASSWORD_RESET_TOKENS[token]
                 return Response({
                     'error': 'Пользователь не найден'
                 }, status=status.HTTP_404_NOT_FOUND)
@@ -477,9 +473,6 @@ class ResetPasswordView(views.APIView):
             # Parolni o'zgartirish
             user.set_password(new_password)
             user.save()
-            
-            # Tokenni o'chirish
-            del PASSWORD_RESET_TOKENS[token]
             
             return Response({
                 'message': 'Пароль успешно изменен'
