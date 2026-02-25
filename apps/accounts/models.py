@@ -294,7 +294,7 @@ class DesignerQuestionnaire(models.Model):
         ('до 10 м2', 'до 10 м2'),
         ('до 40 м2', 'до 40 м2'),
         ('до 80 м2', 'до 80 м2'),
-        ('дома', 'дома'),
+        ('Без ограничений', 'Без ограничений'),
     ]
     
     # Стоимость за м² — текстовие варианты (не число)
@@ -548,7 +548,7 @@ class DesignerQuestionnaire(models.Model):
         verbose_name='Назначение недвижимости'
     )
     
-    # Площадь объекта (JSONField: list, до 10 м2, до 40 м2, до 80 м2, дома)
+    # Площадь объекта (JSONField: list, до 10 м2, до 40 м2, до 80 м2, Без ограничений)
     area_of_object = models.JSONField(
         default=list,
         blank=True,
@@ -828,12 +828,11 @@ class RepairQuestionnaire(models.Model):
         verbose_name='Категории'
     )
     
-    # Скорость исполнения (JSONField: list of keys from SPEED_OF_EXECUTION_CHOICES)
     speed_of_execution = models.JSONField(
         default=list,
         blank=True,
         verbose_name='Скорость исполнения'
-    )
+    ) 
     
     # Дополнительная информация
     additional_info = models.TextField(

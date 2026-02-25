@@ -1526,7 +1526,7 @@ class UserPublicProfileView(views.APIView):
     - photo: Прикрепите ваше фото для личного кабинета (необязательное, файл)
     - categories: Категории (массив, необязательное). Варианты: residential_designer, commercial_designer, decorator, home_stager, architect, landscape_designer, light_designer
     - purpose_of_property: Назначение недвижимости (массив, необязательное). Варианты: permanent_residence, for_rent, commercial, horeca
-    - area_of_object: Площадь объекта (массив). Yuboriladi: до 10 м2, до 40 м2, до 80 м2, дома. PUT: yangi list eski o'rniga.
+    - area_of_object: Площадь объекта (массив). Yuboriladi: до 10 м2, до 40 м2, до 80 м2, Без ограничений. PUT: yangi list eski o'rniga.
     - cost_per_m2: Стоимость за м² (текст: До 1500 р, до 2500р, до 4000 р, свыше 4000 р)
     - experience: Опыт работы (текст: Новичок, До 2 лет, 2-5 лет, 5-10 лет, Свыше 10 лет)
     
@@ -1858,7 +1858,7 @@ class DesignerQuestionnaireListView(views.APIView):
       * до 10 м² (up_to_10m2)
       * до 40 м² (up_to_40m2)
       * до 80 м² (up_to_80m2)
-      * дома (houses)
+      * Без ограничений (houses)
       * не важно (not_important)
     - cost_per_sqm_options: Стоимость за м2 - Стоимость за м2
       * До 1500 р (up_to_1500)
@@ -1962,7 +1962,7 @@ class DesignerQuestionnaireFilterChoicesView(views.APIView):
             {'value': 'до 10 м2', 'label': 'до 10 м2'},
             {'value': 'до 40 м2', 'label': 'до 40 м2'},
             {'value': 'до 80 м2', 'label': 'до 80 м2'},
-            {'value': 'дома', 'label': 'дома'},
+            {'value': 'Без ограничений', 'label': 'Без ограничений'},
             {'value': 'not_important', 'label': 'Не важно'},
         ]
         

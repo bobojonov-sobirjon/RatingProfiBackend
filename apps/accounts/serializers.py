@@ -1155,7 +1155,7 @@ class DesignerQuestionnaireSerializer(serializers.ModelSerializer):
         child=serializers.CharField(),
         required=False,
         allow_empty=True,
-        help_text="Площадь объекта (массив). Yuboriladi: до 10 м2, до 40 м2, до 80 м2, дома. PUT: yangi list eski o'rniga."
+        help_text="Площадь объекта (массив). Yuboriladi: до 10 м2, до 40 м2, до 80 м2, Без ограничений. PUT: yangi list eski o'rniga."
     )
     cost_per_m2 = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Стоимость за м²: До 1500 р, до 2500р, до 4000 р, свыше 4000 р")
     experience = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text="Опыт работы: Новичок, До 2 лет, 2-5 лет, 5-10 лет, Свыше 10 лет")
