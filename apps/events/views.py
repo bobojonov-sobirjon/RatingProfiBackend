@@ -1189,35 +1189,24 @@ class AllReportsView(views.APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        # Поиск по телефону или имени
-        if search:
-            queryset = queryset.filter(
-                django_models.Q(user__phone__icontains=search) |
-                django_models.Q(user__full_name__icontains=search)
-            )
-        
         # Сортировка
-        valid_ordering = ['created_at', '-created_at', 'start_date', '-start_date', 
+        valid_ordering = ['created_at', '-created_at', 'start_date', '-start_date',
                          'end_date', '-end_date', 'updated_at', '-updated_at']
         if ordering in valid_ordering:
             queryset = queryset.order_by(ordering)
         else:
             queryset = queryset.order_by('-created_at')
         
-        # Пагинация
-        paginator = LimitOffsetPagination()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
-        
-        # Сериализация
-        results = []
-        for report in paginated_queryset:
+        # Barcha reportlarni olish va name bilan results yig'ish
+        # (search responce dagi name bo'yicha qilinadi)
+        all_reports = list(queryset)
+        results_raw = []
+        for report in all_reports:
             # Group ni user.groups dan olish
             user_groups = report.user.groups.all()
             if user_groups.exists():
-                # Birinchi group nomini olish
                 group = user_groups.first().name
             else:
-                # Agar groups bo'lmasa, role'dan olish (fallback)
                 role_display_map = {
                     'designer': 'Дизайнер',
                     'repair': 'Ремонт',
@@ -1226,14 +1215,13 @@ class AllReportsView(views.APIView):
                 }
                 group = role_display_map.get(report.user.role, report.user.role or 'Не указано')
             
-            # Full name olish. "без имени" bo'lsa anketadagi brand_name ishlatiladi
+            # name — responce dagi name (company_name yoki phone)
             name = UserPublicSerializer(report.user).data.get('company_name') or report.user.phone or 'Не указано'
             
-            # is_active: hozirgi sana start_date va end_date orasida bo'lsa True
             today = timezone.now().date()
             is_active = report.start_date <= today <= report.end_date
             
-            results.append({
+            results_raw.append({
                 'id': report.id,
                 'user_id': report.user.id,
                 'name': name,
@@ -1243,4 +1231,12 @@ class AllReportsView(views.APIView):
                 'is_active': is_active,
             })
         
-        return paginator.get_paginated_response(results)
+        # Search: responce dagi name bo'yicha filter
+        if search:
+            search_lower = search.strip().lower()
+            results_raw = [r for r in results_raw if search_lower in (r.get('name') or '').lower()]
+        
+        # Пагинация
+        paginator = LimitOffsetPagination()
+        page = paginator.paginate_queryset(results_raw, request)
+        return paginator.get_paginated_response(page)
