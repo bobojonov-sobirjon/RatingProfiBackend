@@ -1300,6 +1300,7 @@ class QuestionnaireListView(views.APIView):
                 # Full name filter
                 if filter_full_name:
                     full_name = item.get('full_name', '') or ''
+                    brand_name = item.get('brand_name', '') or ''
                     if filter_full_name.lower() not in full_name.lower():
                         continue
                 
