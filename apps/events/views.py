@@ -728,7 +728,8 @@ class ReviewsPageView(views.APIView):
         if search:
             queryset = queryset.filter(
                 django_models.Q(text__icontains=search) |
-                django_models.Q(reviewer__phone__icontains=search)
+                django_models.Q(reviewer__phone__icontains=search) |
+                django_models.Q(reviewer__full_name__icontains=search)
             )
         
         # Сортировка: pending review'lar doim tepada
