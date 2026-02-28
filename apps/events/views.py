@@ -723,15 +723,6 @@ class ReviewsPageView(views.APIView):
         if role_filter:
             queryset = queryset.filter(role=role_filter)
         
-        # Поиск
-        search = request.query_params.get('search')
-        if search:
-            queryset = queryset.filter(
-                django_models.Q(text__icontains=search) |
-                django_models.Q(reviewer__phone__icontains=search) |
-                django_models.Q(reviewer__full_name__icontains=search)
-            )
-        
         # Сортировка: pending review'lar doim tepada
         from django.db.models import Case, When, IntegerField
         queryset = queryset.annotate(
@@ -744,18 +735,38 @@ class ReviewsPageView(views.APIView):
         
         ordering = request.query_params.get('ordering', '-created_at')
         if ordering:
-            # Avval status_priority bo'yicha (pending=0, qolganlari=1), keyin ordering bo'yicha
             queryset = queryset.order_by('status_priority', ordering)
         else:
-            # Agar ordering ko'rsatilmagan bo'lsa, faqat status_priority va created_at bo'yicha
             queryset = queryset.order_by('status_priority', '-created_at')
+        
+        # Search: responce dagi reviewer_name, reviewer_company_name, reviewer_phone, text bo'yicha
+        search = request.query_params.get('search', '').strip()
+        if search:
+            all_ratings = list(queryset.select_related('reviewer'))
+            results_raw = []
+            for rating in all_ratings:
+                data = QuestionnaireRatingSerializer(rating, context={'request': request}).data
+                results_raw.append(data)
+            search_lower = search.lower()
+            results_raw = [
+                r for r in results_raw
+                if (search_lower in (r.get('text') or '').lower() or
+                    search_lower in (r.get('reviewer_phone') or '').lower() or
+                    search_lower in (r.get('reviewer_name') or '').lower() or
+                    search_lower in (r.get('reviewer_company_name') or '').lower())
+            ]
+        else:
+            results_raw = None
         
         # Pagination
         paginator = LimitOffsetPagination()
         paginator.default_limit = 20
         paginator.max_limit = 100
-        page = paginator.paginate_queryset(queryset, request)
+        if results_raw is not None:
+            page = paginator.paginate_queryset(results_raw, request)
+            return paginator.get_paginated_response(page)
         
+        page = paginator.paginate_queryset(queryset, request)
         if page is not None:
             serializer = QuestionnaireRatingSerializer(page, many=True, context={'request': request})
             return paginator.get_paginated_response(serializer.data)
