@@ -535,7 +535,7 @@ class RatingPageView(views.APIView):
         if search:
             designers = designers.filter(
                 django_models.Q(full_name__icontains=search) |
-                django_models.Q(brand_name__icontains=search)
+                django_models.Q(full_name_en__icontains=search)
             )
         
         designers_list = list(designers)
