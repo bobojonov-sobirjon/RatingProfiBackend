@@ -1074,7 +1074,6 @@ class QuestionnaireArchiveListView(views.APIView):
         combined_data = list(designer_serializer.data) + list(repair_serializer.data) + list(supplier_serializer.data) + list(media_serializer.data)
         
         # Фильтры (ID, phone, organization_name, full_name)
-        # Faqat DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire bo'yicha filter
         filter_id = request.query_params.get('id')
         filter_phone = request.query_params.get('phone', '').strip()
         filter_org_name = request.query_params.get('organization_name', '').strip()
@@ -1083,13 +1082,6 @@ class QuestionnaireArchiveListView(views.APIView):
         if filter_id or filter_phone or filter_org_name or filter_full_name:
             filtered_data = []
             for item in combined_data:
-                # Faqat DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire ni filter qilamiz
-                request_name = item.get('request_name', '')
-                if request_name not in ['DesignerQuestionnaire', 'RepairQuestionnaire', 'SupplierQuestionnaire']:
-                    # MediaQuestionnaire ni o'tkazib yuboramiz (filter qilmaymiz)
-                    filtered_data.append(item)
-                    continue
-                
                 # ID filter
                 if filter_id:
                     try:
@@ -1104,19 +1096,20 @@ class QuestionnaireArchiveListView(views.APIView):
                     if filter_phone.lower() not in phone.lower():
                         continue
                 
-                # Organization name filter (brand_name)
+                # Organization name filter (brand_name yoki full_name)
                 if filter_org_name:
                     brand_name = item.get('brand_name', '') or ''
                     full_name_check = item.get('full_name', '') or ''
-                    # brand_name yoki full_name da qidirish
-                    if (filter_org_name.lower() not in brand_name.lower() and 
+                    if (filter_org_name.lower() not in brand_name.lower() and
                         filter_org_name.lower() not in full_name_check.lower()):
                         continue
                 
-                # Full name filter
+                # Full name filter (full_name yoki brand_name da qidirish)
                 if filter_full_name:
                     full_name = item.get('full_name', '') or ''
-                    if filter_full_name.lower() not in full_name.lower():
+                    brand_name = item.get('brand_name', '') or ''
+                    if (filter_full_name.lower() not in full_name.lower() and
+                        filter_full_name.lower() not in brand_name.lower()):
                         continue
                 
                 filtered_data.append(item)
@@ -1267,13 +1260,7 @@ class QuestionnaireListView(views.APIView):
         if filter_id or filter_phone or filter_org_name or filter_full_name:
             filtered_data = []
             for item in combined_data:
-                # Faqat DesignerQuestionnaire, RepairQuestionnaire, SupplierQuestionnaire ni filter qilamiz
-                request_name = item.get('request_name', '')
-                if request_name not in ['DesignerQuestionnaire', 'RepairQuestionnaire', 'SupplierQuestionnaire']:
-                    # MediaQuestionnaire ni o'tkazib yuboramiz (filter qilmaymiz)
-                    filtered_data.append(item)
-                    continue
-                
+                # Barcha turdagi anketalarni filter qilamiz (Designer, Repair, Supplier, Media)
                 # ID filter
                 if filter_id:
                     try:
@@ -1288,20 +1275,20 @@ class QuestionnaireListView(views.APIView):
                     if filter_phone.lower() not in phone.lower():
                         continue
                 
-                # Organization name filter (brand_name)
+                # Organization name filter (brand_name yoki full_name)
                 if filter_org_name:
                     brand_name = item.get('brand_name', '') or ''
                     full_name_check = item.get('full_name', '') or ''
-                    # brand_name yoki full_name da qidirish
-                    if (filter_org_name.lower() not in brand_name.lower() and 
+                    if (filter_org_name.lower() not in brand_name.lower() and
                         filter_org_name.lower() not in full_name_check.lower()):
                         continue
                 
-                # Full name filter
+                # Full name filter (full_name yoki brand_name da qidirish)
                 if filter_full_name:
                     full_name = item.get('full_name', '') or ''
                     brand_name = item.get('brand_name', '') or ''
-                    if filter_full_name.lower() not in full_name.lower():
+                    if (filter_full_name.lower() not in full_name.lower() and
+                        filter_full_name.lower() not in brand_name.lower()):
                         continue
                 
                 filtered_data.append(item)
