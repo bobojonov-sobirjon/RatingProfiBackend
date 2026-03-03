@@ -349,7 +349,7 @@ class ForgotPasswordView(views.APIView):
             
             try:
                 send_mail(
-                    subject='Сброс пароля - Rating Profi',
+                    subject='Сброс пароля в «Рейтинг Профи»',
                     message=f'Для сброса пароля перейдите по ссылке: {reset_url}',
                     from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@ratingprofi.ru',
                     recipient_list=[email],
