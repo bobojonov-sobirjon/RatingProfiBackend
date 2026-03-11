@@ -911,12 +911,12 @@ class UserListView(views.APIView):
                 )
             )
 
-            # Endi qidiruv ham original fieldlar, ham biz topgan nom bo'yicha ishlaydi
+            # Endi qidiruv original fieldlar, anketa nomlari, telefon yoki email bo'yicha ishlaydi (OR)
             queryset = queryset.filter(
                 Q(full_name__icontains=search) |
                 Q(company_name__icontains=search) |
-                Q(annotated_company_name__icontains=search) | # Mana shu qidiradi!
-                Q(description__icontains=search),
+                Q(annotated_company_name__icontains=search) |  # anketa brand/full_name
+                Q(description__icontains=search) |
                 Q(phone__icontains=search) |
                 Q(email__icontains=search)
             )
