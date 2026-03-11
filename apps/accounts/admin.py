@@ -8,6 +8,7 @@ class UserAdmin(BaseUserAdmin):
     list_display = [
         'phone',
         'full_name',
+        'brand_name',
         'email',
         'get_groups_display',
         'is_phone_verified',

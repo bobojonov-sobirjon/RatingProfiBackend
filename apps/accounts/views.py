@@ -895,7 +895,9 @@ class UserListView(views.APIView):
             queryset = queryset.filter(
                 django_models.Q(full_name__icontains=search) |
                 django_models.Q(description__icontains=search) |
-                django_models.Q(company_name__icontains=search)
+                django_models.Q(company_name__icontains=search) |
+                django_models.Q(phone__icontains=search) |
+                django_models.Q(email__icontains=search)
             )
         
         # Сортировка
