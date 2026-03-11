@@ -916,7 +916,9 @@ class UserListView(views.APIView):
                 Q(full_name__icontains=search) |
                 Q(company_name__icontains=search) |
                 Q(annotated_company_name__icontains=search) | # Mana shu qidiradi!
-                Q(description__icontains=search)
+                Q(description__icontains=search),
+                Q(phone__icontains=search) |
+                Q(email__icontains=search)
             )
 
         # ... qolgan filtrlar (city, is_active_profile va h.k.)
