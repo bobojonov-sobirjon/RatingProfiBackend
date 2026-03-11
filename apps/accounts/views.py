@@ -15,6 +15,8 @@ from datetime import date, timedelta
 import unicodedata
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.contrib.auth.models import Group
+from django.db.models import Q, Subquery, OuterRef, Value, CharField
+from django.db.models.functions import Coalesce
 
 from .serializers import (
     AdminLoginSerializer,
@@ -864,47 +866,60 @@ class UserListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        """Queryset'ni olish"""
         if getattr(self, 'swagger_fake_view', False):
             return User.objects.none()
-        
-        # Faqat Дизайн, Медиа, Поставщик, Ремонт role'lardagi userlar
+
         allowed_roles = ['Дизайн', 'Ремонт', 'Поставщик', 'Медиа']
         queryset = User.objects.filter(groups__name__in=allowed_roles).distinct()
-        
-        # Фильтр по is_active_profile (если указан)
-        is_active_profile = self.request.query_params.get('is_active_profile')
-        if is_active_profile is not None:
-            if is_active_profile.lower() == 'true':
-                queryset = queryset.filter(is_active_profile=True)
-            elif is_active_profile.lower() == 'false':
-                queryset = queryset.filter(is_active_profile=False)
-        
-        # Фильтр по группе
-        group_filter = self.request.query_params.get('group')
-        if group_filter and group_filter in allowed_roles:
-            queryset = queryset.filter(groups__name=group_filter).distinct()
-        
-        city = self.request.query_params.get('city')
-        if city:
-            queryset = queryset.filter(city__icontains=city)
-        
-        # Поиск
+
+        # 1. Search kelganda anketalardan ham qidirish
         search = self.request.query_params.get('search')
         if search:
-            queryset = queryset.filter(
-                django_models.Q(full_name__icontains=search) |
-                django_models.Q(description__icontains=search) |
-                django_models.Q(company_name__icontains=search) |
-                django_models.Q(phone__icontains=search) |
-                django_models.Q(email__icontains=search)
+            # Har bir anketa modelidan qidiruv uchun subquery'lar (brand_name yoki full_name bo'yicha)
+            # Eslatma: User va Anketa o'rtasida FK yo'qligi sababli telefon/email orqali bog'laymiz
+            
+            # Misol tariqasida RepairQuestionnaire uchun:
+            repair_sub = RepairQuestionnaire.objects.filter(
+                Q(phone=OuterRef('phone')) | Q(email=OuterRef('email')),
+                is_deleted=False
+            ).values('brand_name')[:1]
+
+            designer_sub = DesignerQuestionnaire.objects.filter(
+                Q(phone=OuterRef('phone')) | Q(email=OuterRef('email')),
+                is_deleted=False
+            ).values('full_name')[:1]
+
+            supplier_sub = SupplierQuestionnaire.objects.filter(
+                Q(phone=OuterRef('phone')) | Q(email=OuterRef('email')),
+                is_deleted=False
+            ).values('brand_name')[:1]
+
+            media_sub = MediaQuestionnaire.objects.filter(
+                Q(phone=OuterRef('phone')) | Q(email=OuterRef('email')),
+                is_deleted=False
+            ).values('brand_name')[:1]
+
+            # Userga ushbu topilgan nomlarni vaqtinchalik "annotate" qilib biriktiramiz
+            queryset = queryset.annotate(
+                annotated_company_name=Coalesce(
+                    Subquery(repair_sub), 
+                    Subquery(designer_sub), 
+                    Subquery(supplier_sub),
+                    Subquery(media_sub),
+                    'company_name', # Oxirgi chora sifatida User'dagi company_name
+                    output_field=CharField()
+                )
             )
-        
-        # Сортировка
-        ordering = self.request.query_params.get('ordering', '-created_at')
-        if ordering:
-            queryset = queryset.order_by(ordering)
-        
+
+            # Endi qidiruv ham original fieldlar, ham biz topgan nom bo'yicha ishlaydi
+            queryset = queryset.filter(
+                Q(full_name__icontains=search) |
+                Q(company_name__icontains=search) |
+                Q(annotated_company_name__icontains=search) | # Mana shu qidiradi!
+                Q(description__icontains=search)
+            )
+
+        # ... qolgan filtrlar (city, is_active_profile va h.k.)
         return queryset
     
     def get(self, request):
